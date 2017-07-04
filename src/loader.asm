@@ -84,13 +84,12 @@ loopcontrol: resq 1
 	error_check "Unable to create loop-control device!"
 
 	sys_open(loopcontrolfilename, O_CLOEXEC | O_RDWR, 0)
-	mov	[loopcontrol], rax
 	error_check "Unable to open loop-control device!"
 
-%ifndef DEBUG
+	mov	[loopcontrol], rax
+
 	sys_unlink(loopcontrolfilename)
 	error_check "Unable to unlink loop-control device!"
-%endif
 
 _usr:
 	[section .data]
@@ -102,7 +101,7 @@ usrsquashfsfilename: db "srv/read-only/usr.squashfs", 0
 	cmp	rax,	ENOENT
 	jne	.0
 	print STDOUT, "Unable to find squashfs file for /usr, skipping mount."
-	jmp	_lib64
+	jmp	_usr_skip
 .0:	error_check "Unable to open squashfs file for /usr!"
 
 	[section .bss]
@@ -143,17 +142,17 @@ usrloopdevfilename: db "loop-usr", 0
 	error_check "Unable to close loopback device for /usr!"
 
 	[section .data]
-usrmountpoint: db "usr/", 0
+usrmountpoint: db "usr", 0
 	alignz 16
 	__SECT__
 
 	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, 0, nullstring)
 	error_check "Unable to mount /usr!"
 
-%ifndef DEBUG
 	sys_unlink(usrloopdevfilename)
 	error_check "Unable to unlink loopback device for /usr!"
-%endif
+
+_usr_skip:
 
 
 
@@ -167,7 +166,7 @@ lib64squashfsfilename: db "srv/read-only/lib64.squashfs", 0
 	cmp	rax,	ENOENT
 	jne	.0
 	print STDOUT, "Unable to find squashfs file for /lib64, skipping mount."
-	jmp	_hidden
+	jmp	_lib64_skip
 .0:	error_check "Unable to open squashfs file for /lib64!"
 
 	[section .bss]
@@ -215,10 +214,10 @@ lib64mountpoint: db "lib64/", 0
 	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, 0, nullstring)
 	error_check "Unable to mount /lib64!"
 
-%ifndef DEBUG
 	sys_unlink(lib64loopdevfilename)
 	error_check "Unable to unlink loopback device for /lib64!"
-%endif
+
+_lib64_skip:
 
 
 
@@ -232,7 +231,7 @@ hiddensquashfsfilename: db "srv/read-only/hidden.squashfs", 0
 	cmp	rax,	ENOENT
 	jne	.0
 	print STDOUT, "Unable to find squashfs file for hiding /srv/read-only, skipping mount."
-	jmp	_execve
+	jmp	_hidden_skip
 .0:	error_check "Unable to open squashfs file for hiding /srv/read-only!"
 
 	[section .bss]
@@ -280,10 +279,10 @@ hiddenmountpoint: db "srv/read-only", 0
 	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, 0, nullstring)
 	error_check "Unable to apply mount to hide /srv/read-only!"
 
-%ifndef DEBUG
 	sys_unlink(hiddenloopdevfilename)
 	error_check "Unable to unlink loopback device for hiding /srv/read-only!"
-%endif
+
+_hidden_skip:
 
 
 

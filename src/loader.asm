@@ -35,6 +35,9 @@
 %%skip:
 %endmacro
 
+section .bss align=16
+errno: resq 1
+
 section .data align=16
 error_buffer:
 .ptr:	db	"Unknown Error 0x"
@@ -52,23 +55,20 @@ error_banner:
 .len2:	EQU $-.ptr
 	alignz	16
 
-section .bss align=16
-errno: resq 1
-
 section .text
 
 __abort:
-	mov	rbx,	[errno]
+	mov	rax,	[errno]
 	error_print  -1, "EPERM"
 	error_print -17, "EEXIST"
 	error_print -22, "EINVAL"
 
 	mov	ecx,	16
-.0:	mov	rax,	rbx
-	shr	rbx,	4
-	and	eax,	15
-	mov	al,	[hex + eax]
-	mov	[error_buffer.hex + rcx - 1], al
+.0:	mov	rdx,	rax
+	shr	rax,	4
+	and	edx,	15
+	mov	dl,	[hex + edx]
+	mov	[error_buffer.hex + rcx - 1], dl
 	dec	ecx
 	jnz	.0
 	sys_write(STDOUT, error_buffer, error_buffer.len)
@@ -164,4 +164,85 @@ nullstring: db 0
 	error_check "Unable to unlink loopback device for /usr!"
 %endif
 
-	sys_exit(0)
+	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+	error_check "Unable to allocate loopback device for /lib64!"
+
+	[section .bss]
+lib64loopdev: resq 1
+	__SECT__
+
+	or	rax,	7 << 8
+	mov	[lib64loopdev], rax
+
+	[section .data]
+lib64loopdevfilename: db "loop-lib64", 0
+	__SECT__
+
+	sys_mknod(lib64loopdevfilename, S_IFBLK | 0600O, [lib64loopdev])
+	error_check "Unable to create loopback device for /lib64!"
+
+	sys_open(lib64loopdevfilename, O_CLOEXEC | O_RDWR, 0)
+	error_check "Unable to open loopback device for /lib64!"
+
+	mov	[lib64loopdev], rax
+
+	[section .data]
+lib64squashfsfilename: db "srv/lib64.squashfs", 0
+	alignz	16
+	__SECT__
+
+	sys_open(lib64squashfsfilename, O_CLOEXEC | O_RDWR, 0)
+	error_check "Unable to open squashfs file for /lib64!"
+
+	[section .bss]
+lib64squashfsfile: resq 1
+	__SECT__
+
+	mov	[lib64squashfsfile], rax
+
+	sys_ioctl([lib64loopdev], LOOP_SET_FD, [lib64squashfsfile])
+	error_check "Unable to attach squashfs to loopback device for /lib64!"
+
+	sys_close([lib64squashfsfile])
+	error_check "Unable to close squashfs file for /lib64!"
+
+	sys_close([lib64loopdev])
+	error_check "Unable to close loopback device for /lib64!"
+
+	[section .data]
+lib64mountpoint: db "lib64/", 0
+	alignz	16
+	__SECT__
+
+	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, 0, nullstring)
+	error_check "Unable to mount /lib64!"
+
+%ifndef DEBUG
+	sys_unlink(lib64loopdevfilename)
+	error_check "Unable to unlink loopback device for /lib64!"
+%endif
+
+	[section .data]
+execve_filename: db "sbin/init", 0
+	alignz	16
+
+argv_init: db "init", 0
+	alignz	16
+
+argv:	dq argv_init, 0
+	alignz	16
+
+env_home: db "HOME=/", 0
+	alignz	16
+
+env_term: db "TERM=linux", 0
+	alignz	16
+
+env:	dq env_home, env_term, 0
+	alignz	16
+	__SECT__
+
+	sys_execve(execve_filename, argv, env)
+	error_check "Unable to transfer control to /sbin/init via execve!"
+
+	sys_exit(2)

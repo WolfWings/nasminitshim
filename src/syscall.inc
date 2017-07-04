@@ -35,6 +35,7 @@
 %define sys_open(filename, flags, mode)		syscall_4 2, filename, flags, mode
 %define sys_close(fd)				syscall_2 3, fd
 %define sys_ioctl(fd, cmd, arg)			syscall_4 16, fd, cmd, arg
+%define sys_execve(filename, argv, env)		syscall_4 59, filename, argv, env
 %define sys_exit(code)				syscall_2 60, code
 %define sys_unlink(filename)			syscall_2 87, filename
 %define sys_mknod(filename, mode, dev)		syscall_4 133, filename, mode, dev

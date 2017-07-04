@@ -7,22 +7,6 @@
 
 %define makedev(major, minor) ((minor & 0xff) | ((major & 0xfff) << 8) | ((minor & ~0xff) << 12) | ((major & ~0xfff) << 32))
 
-; dev_t, type, readwrite, fd
-%macro get_device 4
-	sys_mknod(tempdevice, %2 | 0x600, %1)
-	cmp	rax,	0
-	jl	%%skip
-
-	sys_open(tempdevice, O_CLOEXEC | %3, 0)
-	cmp	rax,	0
-	jl	%%skip
-
-	mov	[%4],	rax
-
-	sys_unlink(tempdevice)
-%%skip:
-%endmacro
-
 %macro print 2+
 	[section .data]
 %%str:	db	%2
@@ -86,17 +70,26 @@ __abort:
 _start:
 	print STDOUT, "PocketInit", 10, 13
 
+	[section .data]
+loopcontrolfilename: db "/loop-control", 0
+	__SECT__
+
 	[section .bss]
 loopcontrol: resq 1
 	__SECT__
 
-	get_device makedev(10, 237), S_IFCHR, O_RDWR, loopcontrol
+	sys_mknod(loopcontrolfilename, S_IFCHR | 0x600, makedev(10, 237))
+	error_check "Unable to create loop-control device!"
 
+	sys_open(loopcontrolfilename, O_CLOEXEC | O_RDWR, 0)
+	mov	[loopcontrol], rax
 	error_check "Unable to open loop-control device!"
 
-	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+	sys_unlink(loopcontrolfilename)
+	error_check "Unable to unlink loop-control device!"
 
-	error_check "Unable to allocate loopback device!"
+	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+	error_check "Unable to allocate loopback device for /usr!"
 
 	[section .bss]
 usrloopdev: resq 1
@@ -105,27 +98,56 @@ usrloopdev: resq 1
 	or	rax,	7 << 8
 	mov	[usrloopdev], rax
 
-	get_device [usrloopdev], S_IFBLK, O_RDWR, usrloopdev
+	[section .data]
+usrloopdevfilename: db "/loop-usr", 0
+	__SECT__
 
+	sys_mknod(usrloopdevfilename, S_IFBLK | 0x600, [usrloopdev])
+	error_check "Unable to create loopback device for /usr!"
+
+	sys_open(usrloopdevfilename, O_CLOEXEC | O_RDWR, 0)
 	error_check "Unable to open loopback device for /usr!"
 
+	mov	[usrloopdev], rax
+
 	[section .data]
-usrloopfilename: db "srv/usr.squashfs", 0
+usrsquashfsfilename: db "srv/usr.squashfs", 0
 	alignz	16
 	__SECT__
 
-	sys_open(usrloopfilename, O_CLOEXEC | O_RDWR, 0)
-
+	sys_open(usrsquashfsfilename, O_CLOEXEC | O_RDWR, 0)
 	error_check "Unable to open squashfs file for /usr!"
 
 	[section .bss]
-usrloopfile: resq 1
+usrsquashfsfile: resq 1
 	__SECT__
 
-	mov	[usrloopfile], rax
+	mov	[usrsquashfsfile], rax
 
-	sys_ioctl([usrloopdev], LOOP_SET_FD, [usrloopfile])
-
+	sys_ioctl([usrloopdev], LOOP_SET_FD, [usrsquashfsfile])
 	error_check "Unable to attach squashfs to loopback device for /usr!"
+
+	sys_close([usrsquashfsfile])
+	error_check "Unable to close squashfs file for /usr!"
+
+	sys_close([usrloopdev])
+	error_check "Unable to close loopback device for /usr!"
+
+	[section .data]
+usrmountpoint: db "usr/", 0
+	alignz	16
+
+squashfs: db "squashfs", 0
+	alignz	16
+
+nullstring: db 0
+	alignz 16
+	__SECT__
+
+	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, 0, nullstring)
+	error_check "Unable to mount /usr!"
+
+	sys_unlink(usrloopdevfilename)
+	error_check "Unable to unlink loopback device for /usr!"
 
 	sys_exit(0)

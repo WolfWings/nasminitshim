@@ -61,6 +61,7 @@ __abort:
 	mov	rbx,	[errno]
 	error_print  -1, "EPERM"
 	error_print -17, "EEXIST"
+	error_print -22, "EINVAL"
 
 	mov	ecx,	16
 .0:	mov	rax,	rbx
@@ -113,7 +114,7 @@ usrloopdev: resq 1
 usrloopdevfilename: db "loop-usr", 0
 	__SECT__
 
-	sys_mknod(usrloopdevfilename, S_IFBLK | 0x600, [usrloopdev])
+	sys_mknod(usrloopdevfilename, S_IFBLK | 0600O, [usrloopdev])
 	error_check "Unable to create loopback device for /usr!"
 
 	sys_open(usrloopdevfilename, O_CLOEXEC | O_RDWR, 0)

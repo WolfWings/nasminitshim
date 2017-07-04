@@ -5,8 +5,6 @@
 	align %1, db 0
 %endmacro
 
-%define makedev(major, minor) ((minor & 0xff) | ((major & 0xfff) << 8) | ((minor & ~0xff) << 12) | ((major & ~0xfff) << 32))
-
 %macro print 2+
 	[section .data]
 %%str:	db	%2

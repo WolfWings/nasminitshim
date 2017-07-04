@@ -94,7 +94,7 @@ loopcontrol: resq 1
 
 _usr:
 	[section .data]
-usrsquashfsfilename: db "srv/usr.squashfs", 0
+usrsquashfsfilename: db "srv/read-only/usr.squashfs", 0
 	alignz 16
 	__SECT__
 
@@ -159,7 +159,7 @@ usrmountpoint: db "usr/", 0
 
 _lib64:
 	[section .data]
-lib64squashfsfilename: db "srv/lib64.squashfs", 0
+lib64squashfsfilename: db "srv/read-only/lib64.squashfs", 0
 	alignz 16
 	__SECT__
 
@@ -167,7 +167,7 @@ lib64squashfsfilename: db "srv/lib64.squashfs", 0
 	cmp	rax,	ENOENT
 	jne	.0
 	print STDOUT, "Unable to find squashfs file for /lib64, skipping mount."
-	jmp	_execve
+	jmp	_hidden
 .0:	error_check "Unable to open squashfs file for /lib64!"
 
 	[section .bss]
@@ -218,6 +218,71 @@ lib64mountpoint: db "lib64/", 0
 %ifndef DEBUG
 	sys_unlink(lib64loopdevfilename)
 	error_check "Unable to unlink loopback device for /lib64!"
+%endif
+
+
+
+_hidden:
+	[section .data]
+hiddensquashfsfilename: db "srv/read-only/hidden.squashfs", 0
+	alignz 16
+	__SECT__
+
+	sys_open(hiddensquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+	cmp	rax,	ENOENT
+	jne	.0
+	print STDOUT, "Unable to find squashfs file for hiding /srv/read-only, skipping mount."
+	jmp	_execve
+.0:	error_check "Unable to open squashfs file for hiding /srv/read-only!"
+
+	[section .bss]
+hiddensquashfsfile: resq 1
+	__SECT__
+
+	mov	[hiddensquashfsfile], rax
+
+	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+	error_check "Unable to allocate loopback device for hiding /srv/read-only!"
+
+	[section .bss]
+hiddenloopdev: resq 1
+	__SECT__
+
+	or	rax,	7 << 8
+	mov	[hiddenloopdev], rax
+
+	[section .data]
+hiddenloopdevfilename: db "loop-hidden", 0
+	__SECT__
+
+	sys_mknod(hiddenloopdevfilename, S_IFBLK | 0600O, [hiddenloopdev])
+	error_check "Unable to create loopback device for hiding /srv/read-only!"
+
+	sys_open(hiddenloopdevfilename, O_CLOEXEC | O_RDWR, 0)
+	error_check "Unable to open loopback device for hiding /srv/read-only!"
+
+	mov	[hiddenloopdev], rax
+
+	sys_ioctl([hiddenloopdev], LOOP_SET_FD, [hiddensquashfsfile])
+	error_check "Unable to attach squashfs to loopback device for hiding /srv/read-only!"
+
+	sys_close([hiddensquashfsfile])
+	error_check "Unable to close squashfs file for hiding /srv/read-only!"
+
+	sys_close([hiddenloopdev])
+	error_check "Unable to close loopback device for hiding /srv/read-only!"
+
+	[section .data]
+hiddenmountpoint: db "srv/read-only", 0
+	alignz 16
+	__SECT__
+
+	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, 0, nullstring)
+	error_check "Unable to apply mount to hide /srv/read-only!"
+
+%ifndef DEBUG
+	sys_unlink(hiddenloopdevfilename)
+	error_check "Unable to unlink loopback device for hiding /srv/read-only!"
 %endif
 
 

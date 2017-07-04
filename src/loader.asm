@@ -27,15 +27,22 @@
 %%skip:
 %endmacro
 
+%macro error_print 2+
+	cmp	rbx, QWORD %1
+	jne	%%skip
+	print STDERR, %2, 10, 13
+	jmp	_exit_error
+%%skip:
+%endmacro
+
 section .data align=16
-tempdevice:
-.ptr:	db	"/tempdevice", 0
+error_buffer:
+.ptr:	db	"Unknown Error 0x"
+.hex:	db	"0000000000000000", 10, 13
 .len:	EQU $-.ptr
 	alignz	16
 
-error_buffer:
-.ptr:	db	"Error 000", 10, 13
-.len:	EQU $-.ptr
+hex:	db	"0123456789ABCDEF"
 	alignz	16
 
 error_banner:
@@ -51,19 +58,21 @@ errno: resq 1
 section .text
 
 __abort:
-	mov	rax,	[errno]
-	neg	rax
-	mov	dl,	10
-	div	dl
-	add	ah,	"0"
-	mov	[error_buffer + 8], ah
-	mov	ah,	0
-	div	dl
-	add	ax,	"00"
-	mov	[error_buffer + 7], ah
-	mov	[error_buffer + 6], al
+	mov	rbx,	[errno]
+	error_print -1, "EPERM"
+	error_print -17, "EEXIST"
 
+	mov	ecx,	16
+.0:	mov	rax,	rbx
+	shr	rbx,	4
+	and	eax,	15
+	mov	al,	[hex + eax]
+	mov	[error_buffer.hex + rcx - 1], al
+	dec	ecx
+	jnz	.0
 	sys_write(STDOUT, error_buffer, error_buffer.len)
+
+_exit_error:
 	sys_exit(1)
 
 	global _start:function
@@ -71,22 +80,24 @@ _start:
 	print STDOUT, "PocketInit", 10, 13
 
 	[section .data]
-loopcontrolfilename: db "/loop-control", 0
+loopcontrolfilename: db "loop-control", 0
 	__SECT__
 
 	[section .bss]
 loopcontrol: resq 1
 	__SECT__
 
-	sys_mknod(loopcontrolfilename, S_IFCHR | 0x600, makedev(10, 237))
+	sys_mknod(loopcontrolfilename, S_IFCHR | 0600O, ((10 << 8) + 237))
 	error_check "Unable to create loop-control device!"
+
+	sys_exit(0)
 
 	sys_open(loopcontrolfilename, O_CLOEXEC | O_RDWR, 0)
 	mov	[loopcontrol], rax
 	error_check "Unable to open loop-control device!"
 
-	sys_unlink(loopcontrolfilename)
-	error_check "Unable to unlink loop-control device!"
+;	sys_unlink(loopcontrolfilename)
+;	error_check "Unable to unlink loop-control device!"
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
 	error_check "Unable to allocate loopback device for /usr!"
@@ -99,7 +110,7 @@ usrloopdev: resq 1
 	mov	[usrloopdev], rax
 
 	[section .data]
-usrloopdevfilename: db "/loop-usr", 0
+usrloopdevfilename: db "loop-usr", 0
 	__SECT__
 
 	sys_mknod(usrloopdevfilename, S_IFBLK | 0x600, [usrloopdev])

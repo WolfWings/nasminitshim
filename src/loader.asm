@@ -10,7 +10,7 @@
 %macro print 2+
 	[section .data]
 %%str:	db	%2
-%%ptr:	alignz	16
+%%ptr:	alignz 16
 	__SECT__
 
 	sys_write(%1, %%str, %%ptr - %%str)
@@ -27,42 +27,34 @@
 %%skip:
 %endmacro
 
-%macro error_print 2+
-	cmp	rbx, QWORD %1
-	jne	%%skip
-	print STDERR, %2, 10, 13
-	jmp	_exit_error
-%%skip:
-%endmacro
-
 section .bss align=16
 errno: resq 1
 
 section .data align=16
-error_buffer:
-.ptr:	db	"Unknown Error 0x"
-.hex:	db	"0000000000000000", 10, 13
-.len:	EQU $-.ptr
-	alignz	16
+squashfs: db "squashfs", 0
+	alignz 16
 
-hex:	db	"0123456789ABCDEF"
-	alignz	16
+nullstring: db 0
+	alignz 16
 
-error_banner:
-.ptr:	db	27, "[31;1m!!!ERROR!!!", 27, "["
-.len:	EQU $-.ptr
-	db	"0m", 10, 13
-.len2:	EQU $-.ptr
-	alignz	16
+%include "errors.inc"
 
 section .text
 
 __abort:
 	mov	rax,	[errno]
-	error_print  -1, "EPERM"
-	error_print -17, "EEXIST"
-	error_print -22, "EINVAL"
+	neg	rax
+	shl	rax,	4
+	cmp	rax,	errors.max
+	jae	.unknown
+	mov	rbx,	[errors + rax]
+	cmp	rbx,	0
+	je	.unknown
+	sys_write(STDERR, rbx, [errors + rax + 8])
+	jmp	_exit_error
 
+.unknown:
+	mov	rax,	[errno]
 	mov	ecx,	16
 .0:	mov	rdx,	rax
 	shr	rax,	4
@@ -100,6 +92,25 @@ loopcontrol: resq 1
 	error_check "Unable to unlink loop-control device!"
 %endif
 
+_usr:
+	[section .data]
+usrsquashfsfilename: db "srv/usr.squashfs", 0
+	alignz 16
+	__SECT__
+
+	sys_open(usrsquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+	cmp	rax,	ENOENT
+	jne	.0
+	print STDOUT, "Unable to find squashfs file for /usr, skipping mount."
+	jmp	_lib64
+.0:	error_check "Unable to open squashfs file for /usr!"
+
+	[section .bss]
+usrsquashfsfile: resq 1
+	__SECT__
+
+	mov	[usrsquashfsfile], rax
+
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
 	error_check "Unable to allocate loopback device for /usr!"
 
@@ -122,20 +133,6 @@ usrloopdevfilename: db "loop-usr", 0
 
 	mov	[usrloopdev], rax
 
-	[section .data]
-usrsquashfsfilename: db "srv/usr.squashfs", 0
-	alignz	16
-	__SECT__
-
-	sys_open(usrsquashfsfilename, O_CLOEXEC | O_RDWR, 0)
-	error_check "Unable to open squashfs file for /usr!"
-
-	[section .bss]
-usrsquashfsfile: resq 1
-	__SECT__
-
-	mov	[usrsquashfsfile], rax
-
 	sys_ioctl([usrloopdev], LOOP_SET_FD, [usrsquashfsfile])
 	error_check "Unable to attach squashfs to loopback device for /usr!"
 
@@ -147,12 +144,6 @@ usrsquashfsfile: resq 1
 
 	[section .data]
 usrmountpoint: db "usr/", 0
-	alignz	16
-
-squashfs: db "squashfs", 0
-	alignz	16
-
-nullstring: db 0
 	alignz 16
 	__SECT__
 
@@ -163,6 +154,27 @@ nullstring: db 0
 	sys_unlink(usrloopdevfilename)
 	error_check "Unable to unlink loopback device for /usr!"
 %endif
+
+
+
+_lib64:
+	[section .data]
+lib64squashfsfilename: db "srv/lib64.squashfs", 0
+	alignz 16
+	__SECT__
+
+	sys_open(lib64squashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+	cmp	rax,	ENOENT
+	jne	.0
+	print STDOUT, "Unable to find squashfs file for /lib64, skipping mount."
+	jmp	_execve
+.0:	error_check "Unable to open squashfs file for /lib64!"
+
+	[section .bss]
+lib64squashfsfile: resq 1
+	__SECT__
+
+	mov	[lib64squashfsfile], rax
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
 	error_check "Unable to allocate loopback device for /lib64!"
@@ -186,20 +198,6 @@ lib64loopdevfilename: db "loop-lib64", 0
 
 	mov	[lib64loopdev], rax
 
-	[section .data]
-lib64squashfsfilename: db "srv/lib64.squashfs", 0
-	alignz	16
-	__SECT__
-
-	sys_open(lib64squashfsfilename, O_CLOEXEC | O_RDWR, 0)
-	error_check "Unable to open squashfs file for /lib64!"
-
-	[section .bss]
-lib64squashfsfile: resq 1
-	__SECT__
-
-	mov	[lib64squashfsfile], rax
-
 	sys_ioctl([lib64loopdev], LOOP_SET_FD, [lib64squashfsfile])
 	error_check "Unable to attach squashfs to loopback device for /lib64!"
 
@@ -211,7 +209,7 @@ lib64squashfsfile: resq 1
 
 	[section .data]
 lib64mountpoint: db "lib64/", 0
-	alignz	16
+	alignz 16
 	__SECT__
 
 	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, 0, nullstring)
@@ -222,24 +220,28 @@ lib64mountpoint: db "lib64/", 0
 	error_check "Unable to unlink loopback device for /lib64!"
 %endif
 
+
+
+_execve:
+
 	[section .data]
 execve_filename: db "sbin/init", 0
-	alignz	16
+	alignz 16
 
 argv_init: db "init", 0
-	alignz	16
+	alignz 16
 
 argv:	dq argv_init, 0
-	alignz	16
+	alignz 16
 
 env_home: db "HOME=/", 0
-	alignz	16
+	alignz 16
 
 env_term: db "TERM=linux", 0
-	alignz	16
+	alignz 16
 
 env:	dq env_home, env_term, 0
-	alignz	16
+	alignz 16
 	__SECT__
 
 	sys_execve(execve_filename, argv, env)

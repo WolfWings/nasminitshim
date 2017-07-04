@@ -1,4 +1,4 @@
-
+	
 %macro syscall_1 1
 	mov	rax,	%1
 	syscall

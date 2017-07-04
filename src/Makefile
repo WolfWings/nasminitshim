@@ -1,7 +1,7 @@
 default:	loader
 
 clean:
-	$(RM) loader.lst loader
+	$(RM) loader.lst loader.o loader
 
 %.o: %.asm
 	nasm -O9 -f elf64 -l $*.lst -o $@ $<
@@ -9,4 +9,4 @@ clean:
 %: %.o
 	ld -s -o $@ $<
 
-loader.asm: constants.inc syscall.inc
+loader.o: constants.inc syscall.inc errors.inc

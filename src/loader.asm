@@ -146,7 +146,7 @@ usrmountpoint: db "usr", 0
 	alignz 16
 	__SECT__
 
-	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, 0, nullstring)
+	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, MS_RDONLY, nullstring)
 	error_check "Unable to mount /usr!"
 
 	sys_unlink(usrloopdevfilename)
@@ -211,7 +211,7 @@ lib64mountpoint: db "lib64/", 0
 	alignz 16
 	__SECT__
 
-	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, 0, nullstring)
+	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, MS_RDONLY, nullstring)
 	error_check "Unable to mount /lib64!"
 
 	sys_unlink(lib64loopdevfilename)
@@ -276,7 +276,7 @@ hiddenmountpoint: db "srv/read-only", 0
 	alignz 16
 	__SECT__
 
-	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, 0, nullstring)
+	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, MS_RDONLY, nullstring)
 	error_check "Unable to apply mount to hide /srv/read-only!"
 
 	sys_unlink(hiddenloopdevfilename)

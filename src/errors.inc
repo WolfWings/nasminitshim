@@ -15,37 +15,37 @@ error_banner:
 	alignz 16
 
 _error_EPERM: ; 1
-.ptr:	db	"EPERM - Invalid permissions requested"
+.ptr:	db	"EPERM - Invalid permissions requested", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_ENOENT: ; 2
-.ptr:	db	"ENOENT - No such file or directory"
+.ptr:	db	"ENOENT - No such file or directory", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_EACCESS: ; 13
-.ptr:	db	"EACCESS - Denied due to permissions"
+.ptr:	db	"EACCESS - Denied due to permissions", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_EEXIST: ; 17
-.ptr:	db	"EEXIST - File already exists"
+.ptr:	db	"EEXIST - File already exists", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_EINVAL: ; 22
-.ptr:	db	"EINVAL - Invalid argument"
+.ptr:	db	"EINVAL - Invalid argument", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_ENOSPC: ; 28
-.ptr:	db	"ENOSPC - No space left on device"
+.ptr:	db	"ENOSPC - No space left on device", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 
 _error_EROFS: ; 30
-.ptr:	db	"EROFS - Read Only Filesystem"
+.ptr:	db	"EROFS - Read Only Filesystem", 10, 13
 .len:	EQU $-.ptr
 	alignz 16
 

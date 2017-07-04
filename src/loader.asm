@@ -59,7 +59,7 @@ section .text
 
 __abort:
 	mov	rbx,	[errno]
-	error_print -1, "EPERM"
+	error_print  -1, "EPERM"
 	error_print -17, "EEXIST"
 
 	mov	ecx,	16
@@ -90,14 +90,14 @@ loopcontrol: resq 1
 	sys_mknod(loopcontrolfilename, S_IFCHR | 0600O, ((10 << 8) + 237))
 	error_check "Unable to create loop-control device!"
 
-	sys_exit(0)
-
 	sys_open(loopcontrolfilename, O_CLOEXEC | O_RDWR, 0)
 	mov	[loopcontrol], rax
 	error_check "Unable to open loop-control device!"
 
-;	sys_unlink(loopcontrolfilename)
-;	error_check "Unable to unlink loop-control device!"
+%ifndef DEBUG
+	sys_unlink(loopcontrolfilename)
+	error_check "Unable to unlink loop-control device!"
+%endif
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
 	error_check "Unable to allocate loopback device for /usr!"
@@ -158,7 +158,9 @@ nullstring: db 0
 	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, 0, nullstring)
 	error_check "Unable to mount /usr!"
 
+%ifndef DEBUG
 	sys_unlink(usrloopdevfilename)
 	error_check "Unable to unlink loopback device for /usr!"
+%endif
 
 	sys_exit(0)

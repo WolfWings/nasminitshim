@@ -39,8 +39,9 @@ nullstring: db 0
 
 section .text
 
+	alignz 16
 __loopback_mount:
-
+	sub	rsp,	16
 	sys_open([rsp + 40], O_CLOEXEC | O_RDONLY, 0)
 	cmp	rax,	ENOENT
 	jne	.0
@@ -48,29 +49,29 @@ __loopback_mount:
 	jmp	.skip
 .0:	error_check "Unable to open squashfs file!"
 
-	mov	[rsp + 16], rax
+	mov	[rsp + 8], rax
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
 	error_check "Unable to allocate loopback device!"
 
 	or	rax,	7 << 8
-	mov	[rsp + 8], rax
+	mov	[rsp], rax
 
-	sys_mknod([rsp + 32], S_IFBLK | 0600O, [rsp + 8])
+	sys_mknod([rsp + 32], S_IFBLK | 0600O, [rsp])
 	error_check "Unable to create loopback device!"
 
 	sys_open([rsp + 32], O_CLOEXEC | O_RDWR, 0)
 	error_check "Unable to open loopback device!"
 
-	mov	[rsp + 8], rax
+	mov	[rsp], rax
 
-	sys_ioctl([rsp + 8], LOOP_SET_FD, [rsp + 16])
+	sys_ioctl([rsp], LOOP_SET_FD, [rsp + 8])
 	error_check "Unable to attach squashfs to loopback device!"
 
-	sys_close([rsp + 16])
+	sys_close([rsp + 8])
 	error_check "Unable to close squashfs file!"
 
-	sys_close([rsp + 8])
+	sys_close([rsp])
 	error_check "Unable to close loopback device!"
 
 	sys_mount([rsp + 32], [rsp + 24], squashfs, MS_RDONLY, nullstring)
@@ -81,10 +82,12 @@ __loopback_mount:
 
 .skip:
 	print STDOUT, 10, 13
+	add	rsp,	16
 	ret
 
 
 
+	alignz 16
 __abort:
 	mov	rax,	[errno]
 	neg	rax
@@ -115,6 +118,7 @@ _exit_error:
 
 
 	global _start:function
+	alignz 16
 _start:
 	print STDOUT, "PocketInit", 10, 13
 
@@ -154,10 +158,8 @@ _usr:
 	push	usrsquashfsfilename	; rsp + 40
 	push	usrloopdevfilename	; rsp + 32
 	push	usrmountpoint		; rsp + 24
-	push	QWORD 0			; rsp + 16
-	push	QWORD 0			; rsp +  8
 	call	__loopback_mount
-	add	rsp,	40
+	add	rsp,	24
 
 
 
@@ -178,10 +180,8 @@ _lib64:
 	push	lib64squashfsfilename	; rsp + 40
 	push	lib64loopdevfilename	; rsp + 32
 	push	lib64mountpoint		; rsp + 24
-	push	QWORD 0			; rsp + 16
-	push	QWORD 0			; rsp +  8
 	call	__loopback_mount
-	add	rsp,	40
+	add	rsp,	24
 
 
 
@@ -202,10 +202,8 @@ _hidden:
 	push	hiddensquashfsfilename	; rsp + 40
 	push	hiddenloopdevfilename	; rsp + 32
 	push	hiddenmountpoint	; rsp + 24
-	push	QWORD 0			; rsp + 16
-	push	QWORD 0			; rsp +  8
 	call	__loopback_mount
-	add	rsp,	40
+	add	rsp,	24
 
 
 

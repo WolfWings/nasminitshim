@@ -1,0 +1,2474 @@
+     1                                  %include "constants.inc"
+     1                              <1> STDIN			EQU 0
+     2                              <1> STDOUT			EQU 1
+     3                              <1> STDERR			EQU 2
+     4                              <1> 
+     5                              <1> O_RDONLY		EQU 0
+     6                              <1> O_WRONLY		EQU 1
+     7                              <1> O_RDWR			EQU 2
+     8                              <1> 
+     9                              <1> O_CLOEXEC		EQU 02000000O
+    10                              <1> 
+    11                              <1> S_IFSOCK		EQU 0140000O
+    12                              <1> S_IFLNK			EQU 0120000O
+    13                              <1> S_IFREG			EQU 0100000O
+    14                              <1> S_IFBLK			EQU 0060000O
+    15                              <1> S_IFDIR			EQU 0040000O
+    16                              <1> S_IFCHR			EQU 0020000O
+    17                              <1> S_IFIFO			EQU 0010000O
+    18                              <1> S_ISUID			EQU 0004000O
+    19                              <1> S_ISGID			EQU 0002000O
+    20                              <1> S_ISVTX			EQU 0001000O
+    21                              <1> 
+    22                              <1> LOOP_SET_FD		EQU 0x4C00
+    23                              <1> 
+    24                              <1> LOOP_CTL_GET_FREE	EQU 0x4C82
+    25                              <1> 
+    26                              <1> ENOENT			EQU -2
+    27                              <1> 
+    28                              <1> MS_RDONLY		EQU 1
+     2                                  %include "syscall.inc"
+     1                              <1> 	
+     2                              <1> %macro syscall_1 1
+     3                              <1> 	mov	rax,	%1
+     4                              <1> 	syscall
+     5                              <1> %endmacro
+     6                              <1> 
+     7                              <1> %macro syscall_2 2
+     8                              <1> 	mov	rdi,	%2
+     9                              <1> 	syscall_1	%1
+    10                              <1> %endmacro
+    11                              <1> 
+    12                              <1> %macro syscall_3 3
+    13                              <1> 	mov	rsi,	%3
+    14                              <1> 	syscall_2	%1, %2
+    15                              <1> %endmacro
+    16                              <1> 
+    17                              <1> %macro syscall_4 4
+    18                              <1> 	mov	rdx,	%4
+    19                              <1> 	syscall_3	%1, %2, %3
+    20                              <1> %endmacro
+    21                              <1> 
+    22                              <1> %macro syscall_5 5
+    23                              <1> 	mov	r10,	%5
+    24                              <1> 	syscall_4	%1, %2, %3, %4
+    25                              <1> %endmacro
+    26                              <1> 
+    27                              <1> %macro syscall_6 6
+    28                              <1> 	mov	r8,	%6
+    29                              <1> 	syscall_5	%1, %2, %3, %4, %5
+    30                              <1> %endmacro
+    31                              <1> 
+    32                              <1> 
+    33                              <1> 
+    34                              <1> %define sys_write(fd, buf, len)			syscall_4 1, fd, buf, len
+    35                              <1> %define sys_open(filename, flags, mode)		syscall_4 2, filename, flags, mode
+    36                              <1> %define sys_close(fd)				syscall_2 3, fd
+    37                              <1> %define sys_ioctl(fd, cmd, arg)			syscall_4 16, fd, cmd, arg
+    38                              <1> %define sys_execve(filename, argv, env)		syscall_4 59, filename, argv, env
+    39                              <1> %define sys_exit(code)				syscall_2 60, code
+    40                              <1> %define sys_unlink(filename)			syscall_2 87, filename
+    41                              <1> %define sys_mknod(filename, mode, dev)		syscall_4 133, filename, mode, dev
+    42                              <1> %define sys_mount(dev, dir, type, flags, data)	syscall_6 165, dev, dir, type, flags, data
+     3                                  
+     4                                  %macro alignz 1
+     5                                  	align %1, db 0
+     6                                  %endmacro
+     7                                  
+     8                                  %macro print 2+
+     9                                  	[section .data]
+    10                                  %%str:	db	%2
+    11                                  %%ptr:	alignz 16
+    12                                  	__SECT__
+    13                                  
+    14                                  	sys_write(%1, %%str, %%ptr - %%str)
+    15                                  %endmacro
+    16                                  
+    17                                  %macro error_check 1+
+    18                                  	cmp	rax,	0
+    19                                  	jge	%%skip
+    20                                  	mov	[errno],	rax
+    21                                  	sys_write(STDERR, error_banner, error_banner.len)
+    22                                  	print STDERR, "37m ", %1, " "
+    23                                  	sys_write(STDERR, error_banner, error_banner.len2)
+    24                                  	jmp	__abort
+    25                                  %%skip:
+    26                                  %endmacro
+    27                                  
+    28                                  section .bss align=16
+    29 00000000 <res 00000008>          errno: resq 1
+    30                                  
+    31                                  section .data align=16
+    32 00000000 737175617368667300      squashfs: db "squashfs", 0
+    33                                  	alignz 16
+    33 00000009 00<rept>            <1>  align %1, db 0
+    34                                  
+    35 00000010 00                      nullstring: db 0
+    36                                  	alignz 16
+    36 00000011 00<rept>            <1>  align %1, db 0
+    37                                  
+    38                                  %include "errors.inc"
+     1                              <1> error_buffer:
+     2 00000020 556E6B6E6F776E2045- <1> .ptr:	db	"Unknown Error 0x"
+     2 00000029 72726F72203078      <1>
+     3 00000030 303030303030303030- <1> .hex:	db	"0000000000000000", 10, 13
+     3 00000039 303030303030300A0D  <1>
+     4                              <1> .len:	EQU $-.ptr
+     5                              <1> 	alignz 16
+     5 00000042 00<rept>            <2>  align %1, db 0
+     6                              <1> 
+     7 00000050 303132333435363738- <1> hex:	db	"0123456789ABCDEF"
+     7 00000059 39414243444546      <1>
+     8                              <1> 	alignz 16
+     8                              <2>  align %1, db 0
+     9                              <1> 
+    10                              <1> error_banner:
+    11 00000060 1B5B33313B316D2121- <1> .ptr:	db	27, "[31;1m!!!ERROR!!!", 27, "["
+    11 00000069 214552524F52212121- <1>
+    11 00000072 1B5B                <1>
+    12                              <1> .len:	EQU $-.ptr
+    13 00000074 306D0A0D            <1> 	db	"0m", 10, 13
+    14                              <1> .len2:	EQU $-.ptr
+    15                              <1> 	alignz 16
+    15 00000078 00<rept>            <2>  align %1, db 0
+    16                              <1> 
+    17                              <1> _error_EPERM: ; 1
+    18 00000080 455045524D202D2049- <1> .ptr:	db	"EPERM - Invalid permissions requested", 10, 13
+    18 00000089 6E76616C6964207065- <1>
+    18 00000092 726D697373696F6E73- <1>
+    18 0000009B 207265717565737465- <1>
+    18 000000A4 640A0D              <1>
+    19                              <1> .len:	EQU $-.ptr
+    20                              <1> 	alignz 16
+    20 000000A7 00<rept>            <2>  align %1, db 0
+    21                              <1> 
+    22                              <1> _error_ENOENT: ; 2
+    23 000000B0 454E4F454E54202D20- <1> .ptr:	db	"ENOENT - No such file or directory", 10, 13
+    23 000000B9 4E6F20737563682066- <1>
+    23 000000C2 696C65206F72206469- <1>
+    23 000000CB 726563746F72790A0D  <1>
+    24                              <1> .len:	EQU $-.ptr
+    25                              <1> 	alignz 16
+    25 000000D4 00<rept>            <2>  align %1, db 0
+    26                              <1> 
+    27                              <1> _error_EACCESS: ; 13
+    28 000000E0 45414343455353202D- <1> .ptr:	db	"EACCESS - Denied due to permissions", 10, 13
+    28 000000E9 2044656E6965642064- <1>
+    28 000000F2 756520746F20706572- <1>
+    28 000000FB 6D697373696F6E730A- <1>
+    28 00000104 0D                  <1>
+    29                              <1> .len:	EQU $-.ptr
+    30                              <1> 	alignz 16
+    30 00000105 00<rept>            <2>  align %1, db 0
+    31                              <1> 
+    32                              <1> _error_EEXIST: ; 17
+    33 00000110 454558495354202D20- <1> .ptr:	db	"EEXIST - File already exists", 10, 13
+    33 00000119 46696C6520616C7265- <1>
+    33 00000122 616479206578697374- <1>
+    33 0000012B 730A0D              <1>
+    34                              <1> .len:	EQU $-.ptr
+    35                              <1> 	alignz 16
+    35 0000012E 00<rept>            <2>  align %1, db 0
+    36                              <1> 
+    37                              <1> _error_EINVAL: ; 22
+    38 00000130 45494E56414C202D20- <1> .ptr:	db	"EINVAL - Invalid argument", 10, 13
+    38 00000139 496E76616C69642061- <1>
+    38 00000142 7267756D656E740A0D  <1>
+    39                              <1> .len:	EQU $-.ptr
+    40                              <1> 	alignz 16
+    40 0000014B 00<rept>            <2>  align %1, db 0
+    41                              <1> 
+    42                              <1> _error_ENOSPC: ; 28
+    43 00000150 454E4F535043202D20- <1> .ptr:	db	"ENOSPC - No space left on device", 10, 13
+    43 00000159 4E6F20737061636520- <1>
+    43 00000162 6C656674206F6E2064- <1>
+    43 0000016B 65766963650A0D      <1>
+    44                              <1> .len:	EQU $-.ptr
+    45                              <1> 	alignz 16
+    45 00000172 00<rept>            <2>  align %1, db 0
+    46                              <1> 
+    47                              <1> _error_EROFS: ; 30
+    48 00000180 45524F4653202D2052- <1> .ptr:	db	"EROFS - Read Only Filesystem", 10, 13
+    48 00000189 656164204F6E6C7920- <1>
+    48 00000192 46696C657379737465- <1>
+    48 0000019B 6D0A0D              <1>
+    49                              <1> .len:	EQU $-.ptr
+    50                              <1> 	alignz 16
+    50 0000019E 00<rept>            <2>  align %1, db 0
+    51                              <1> 
+    52 000001A0 000000000000000000- <1> errors:	dq	0, 0
+    52 000001A9 00000000000000      <1>
+    53 000001B0 [8000000000000000]- <1> 	dq	_error_EPERM, _error_EPERM.len  ; 1
+    53 000001B8 2700000000000000    <1>
+    54 000001C0 [B000000000000000]- <1> 	dq	_error_ENOENT, _error_EPERM.len ; 2
+    54 000001C8 2700000000000000    <1>
+    55 000001D0 000000000000000000- <1> 	dq	0, 0 ; 3
+    55 000001D9 00000000000000      <1>
+    56 000001E0 000000000000000000- <1> 	dq	0, 0 ; 4
+    56 000001E9 00000000000000      <1>
+    57 000001F0 000000000000000000- <1> 	dq	0, 0 ; 5
+    57 000001F9 00000000000000      <1>
+    58 00000200 000000000000000000- <1> 	dq	0, 0 ; 6
+    58 00000209 00000000000000      <1>
+    59 00000210 000000000000000000- <1> 	dq	0, 0 ; 7
+    59 00000219 00000000000000      <1>
+    60 00000220 000000000000000000- <1> 	dq	0, 0 ; 8
+    60 00000229 00000000000000      <1>
+    61 00000230 000000000000000000- <1> 	dq	0, 0 ; 9
+    61 00000239 00000000000000      <1>
+    62 00000240 000000000000000000- <1> 	dq	0, 0 ; 10
+    62 00000249 00000000000000      <1>
+    63 00000250 000000000000000000- <1> 	dq	0, 0 ; 11
+    63 00000259 00000000000000      <1>
+    64 00000260 000000000000000000- <1> 	dq	0, 0 ; 12
+    64 00000269 00000000000000      <1>
+    65 00000270 [E000000000000000]- <1> 	dq	_error_EACCESS, _error_EACCESS.len ; 13
+    65 00000278 2500000000000000    <1>
+    66 00000280 000000000000000000- <1> 	dq	0, 0 ; 14
+    66 00000289 00000000000000      <1>
+    67 00000290 000000000000000000- <1> 	dq	0, 0 ; 15
+    67 00000299 00000000000000      <1>
+    68 000002A0 000000000000000000- <1> 	dq	0, 0 ; 16
+    68 000002A9 00000000000000      <1>
+    69 000002B0 [1001000000000000]- <1> 	dq	_error_EEXIST, _error_EEXIST.len ; 17
+    69 000002B8 1E00000000000000    <1>
+    70 000002C0 000000000000000000- <1> 	dq	0, 0 ; 18
+    70 000002C9 00000000000000      <1>
+    71 000002D0 000000000000000000- <1> 	dq	0, 0 ; 19
+    71 000002D9 00000000000000      <1>
+    72 000002E0 000000000000000000- <1> 	dq	0, 0 ; 20
+    72 000002E9 00000000000000      <1>
+    73 000002F0 000000000000000000- <1> 	dq	0, 0 ; 21
+    73 000002F9 00000000000000      <1>
+    74 00000300 [3001000000000000]- <1> 	dq	_error_EINVAL, _error_EINVAL.len ; 22
+    74 00000308 1B00000000000000    <1>
+    75 00000310 000000000000000000- <1> 	dq	0, 0 ; 23
+    75 00000319 00000000000000      <1>
+    76 00000320 000000000000000000- <1> 	dq	0, 0 ; 24
+    76 00000329 00000000000000      <1>
+    77 00000330 000000000000000000- <1> 	dq	0, 0 ; 25
+    77 00000339 00000000000000      <1>
+    78 00000340 000000000000000000- <1> 	dq	0, 0 ; 26
+    78 00000349 00000000000000      <1>
+    79 00000350 000000000000000000- <1> 	dq	0, 0 ; 27
+    79 00000359 00000000000000      <1>
+    80 00000360 [5001000000000000]- <1> 	dq	_error_ENOSPC, _error_ENOSPC.len ; 28
+    80 00000368 2200000000000000    <1>
+    81 00000370 000000000000000000- <1> 	dq	0, 0 ; 29
+    81 00000379 00000000000000      <1>
+    82 00000380 [8001000000000000]- <1> 	dq	_error_EROFS, _error_EROFS.len ; 30
+    82 00000388 1E00000000000000    <1>
+    83                              <1> .max:	EQU ($-errors)
+    84                              <1> 
+    85                              <1> 	alignz 16
+    85                              <2>  align %1, db 0
+    39                                  
+    40                                  section .text
+    41                                  
+    42                                  __abort:
+    43 00000000 488B0425[00000000]      	mov	rax,	[errno]
+    44 00000008 48F7D8                  	neg	rax
+    45 0000000B 48C1E004                	shl	rax,	4
+    46 0000000F 483DF0010000            	cmp	rax,	errors.max
+    47 00000015 7325                    	jae	.unknown
+    48 00000017 488B98[A0010000]        	mov	rbx,	[errors + rax]
+    49 0000001E 4883FB00                	cmp	rbx,	0
+    50 00000022 7418                    	je	.unknown
+    51                                  	sys_write(STDERR, rbx, [errors + rax + 8])
+    51 00000024 488B90[A8010000]    <1>  mov rdx, %4
+    51                              <1>  syscall_3 %1, %2, %3
+    51 0000002B 4889DE              <2>  mov rsi, %3
+    51                              <2>  syscall_2 %1, %2
+    51 0000002E BF02000000          <3>  mov rdi, %2
+    51                              <3>  syscall_1 %1
+    51 00000033 B801000000          <4>  mov rax, %1
+    51 00000038 0F05                <4>  syscall
+    52 0000003A EB43                    	jmp	_exit_error
+    53                                  
+    54                                  .unknown:
+    55 0000003C 488B0425[00000000]      	mov	rax,	[errno]
+    56 00000044 B910000000              	mov	ecx,	16
+    57 00000049 4889C2                  .0:	mov	rdx,	rax
+    58 0000004C 48C1E804                	shr	rax,	4
+    59 00000050 83E20F                  	and	edx,	15
+    60 00000053 678A92[50000000]        	mov	dl,	[hex + edx]
+    61 0000005A 8891[2F000000]          	mov	[error_buffer.hex + rcx - 1], dl
+    62 00000060 FFC9                    	dec	ecx
+    63 00000062 75E5                    	jnz	.0
+    64                                  	sys_write(STDOUT, error_buffer, error_buffer.len)
+    64 00000064 BA22000000          <1>  mov rdx, %4
+    64                              <1>  syscall_3 %1, %2, %3
+    64 00000069 48BE-               <2>  mov rsi, %3
+    64 0000006B [2000000000000000]  <2>
+    64                              <2>  syscall_2 %1, %2
+    64 00000073 BF01000000          <3>  mov rdi, %2
+    64                              <3>  syscall_1 %1
+    64 00000078 B801000000          <4>  mov rax, %1
+    64 0000007D 0F05                <4>  syscall
+    65                                  
+    66                                  _exit_error:
+    67                                  	sys_exit(1)
+    67 0000007F BF01000000          <1>  mov rdi, %2
+    67                              <1>  syscall_1 %1
+    67 00000084 B83C000000          <2>  mov rax, %1
+    67 00000089 0F05                <2>  syscall
+    68                                  
+    69                                  	global _start:function
+    70                                  _start:
+    71                                  	print STDOUT, "PocketInit", 10, 13
+    71                              <1>  [section .data]
+    71 00000390 506F636B6574496E69- <1> %%str: db %2
+    71 00000399 740A0D              <1>
+    71                              <1> %%ptr: alignz 16
+    71                              <2> ..@53.ptr: 
+    71 0000039C 00<rept>            <2>  align %1, db 0
+    71                              <1>  __SECT__
+    71                              <1> 
+    71                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+    71 0000008B BA0C000000          <2>  mov rdx, %4
+    71                              <2>  syscall_3 %1, %2, %3
+    71 00000090 48BE-               <3>  mov rsi, %3
+    71 00000092 [9003000000000000]  <3>
+    71                              <3>  syscall_2 %1, %2
+    71 0000009A BF01000000          <4>  mov rdi, %2
+    71                              <4>  syscall_1 %1
+    71 0000009F B801000000          <5>  mov rax, %1
+    71 000000A4 0F05                <5>  syscall
+    72                                  
+    73                                  	[section .data]
+    74 000003A0 6C6F6F702D636F6E74-     loopcontrolfilename: db "loop-control", 0
+    74 000003A9 726F6C00           
+    75                                  	__SECT__
+    76                                  
+    77                                  	[section .bss]
+    78 00000008 <res 00000008>          loopcontrol: resq 1
+    79                                  	__SECT__
+    80                                  
+    81                                  	sys_mknod(loopcontrolfilename, S_IFCHR | 0600O, ((10 << 8) + 237))
+    81 000000A6 BAED0A0000          <1>  mov rdx, %4
+    81                              <1>  syscall_3 %1, %2, %3
+    81 000000AB BE80210000          <2>  mov rsi, %3
+    81                              <2>  syscall_2 %1, %2
+    81 000000B0 48BF-               <3>  mov rdi, %2
+    81 000000B2 [A003000000000000]  <3>
+    81                              <3>  syscall_1 %1
+    81 000000BA B885000000          <4>  mov rax, %1
+    81 000000BF 0F05                <4>  syscall
+    82                                  	error_check "Unable to create loop-control device!"
+    82 000000C1 4883F800            <1>  cmp rax, 0
+    82 000000C5 7D5E                <1>  jge %%skip
+    82 000000C7 48890425[00000000]  <1>  mov [errno], rax
+    82                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+    82 000000CF BA14000000          <2>  mov rdx, %4
+    82                              <2>  syscall_3 %1, %2, %3
+    82 000000D4 48BE-               <3>  mov rsi, %3
+    82 000000D6 [6000000000000000]  <3>
+    82                              <3>  syscall_2 %1, %2
+    82 000000DE BF02000000          <4>  mov rdi, %2
+    82                              <4>  syscall_1 %1
+    82 000000E3 B801000000          <5>  mov rax, %1
+    82 000000E8 0F05                <5>  syscall
+    82                              <1>  print STDERR, "37m ", %1, " "
+    82                              <2>  [section .data]
+    82 000003AD 33376D20556E61626C- <2> %%str: db %2
+    82 000003B6 6520746F2063726561- <2>
+    82 000003BF 7465206C6F6F702D63- <2>
+    82 000003C8 6F6E74726F6C206465- <2>
+    82 000003D1 766963652120        <2>
+    82                              <2> %%ptr: alignz 16
+    82                              <3> ..@70.ptr: 
+    82 000003D7 00<rept>            <3>  align %1, db 0
+    82                              <2>  __SECT__
+    82                              <2> 
+    82                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+    82 000000EA BA2A000000          <3>  mov rdx, %4
+    82                              <3>  syscall_3 %1, %2, %3
+    82 000000EF 48BE-               <4>  mov rsi, %3
+    82 000000F1 [AD03000000000000]  <4>
+    82                              <4>  syscall_2 %1, %2
+    82 000000F9 BF02000000          <5>  mov rdi, %2
+    82                              <5>  syscall_1 %1
+    82 000000FE B801000000          <6>  mov rax, %1
+    82 00000103 0F05                <6>  syscall
+    82                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+    82 00000105 BA18000000          <2>  mov rdx, %4
+    82                              <2>  syscall_3 %1, %2, %3
+    82 0000010A 48BE-               <3>  mov rsi, %3
+    82 0000010C [6000000000000000]  <3>
+    82                              <3>  syscall_2 %1, %2
+    82 00000114 BF02000000          <4>  mov rdi, %2
+    82                              <4>  syscall_1 %1
+    82 00000119 B801000000          <5>  mov rax, %1
+    82 0000011E 0F05                <5>  syscall
+    82 00000120 E9DBFEFFFF          <1>  jmp __abort
+    82                              <1> %%skip:
+    83                                  
+    84                                  	sys_open(loopcontrolfilename, O_CLOEXEC | O_RDWR, 0)
+    84 00000125 BA00000000          <1>  mov rdx, %4
+    84                              <1>  syscall_3 %1, %2, %3
+    84 0000012A BE02000800          <2>  mov rsi, %3
+    84                              <2>  syscall_2 %1, %2
+    84 0000012F 48BF-               <3>  mov rdi, %2
+    84 00000131 [A003000000000000]  <3>
+    84                              <3>  syscall_1 %1
+    84 00000139 B802000000          <4>  mov rax, %1
+    84 0000013E 0F05                <4>  syscall
+    85                                  	error_check "Unable to open loop-control device!"
+    85 00000140 4883F800            <1>  cmp rax, 0
+    85 00000144 7D5E                <1>  jge %%skip
+    85 00000146 48890425[00000000]  <1>  mov [errno], rax
+    85                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+    85 0000014E BA14000000          <2>  mov rdx, %4
+    85                              <2>  syscall_3 %1, %2, %3
+    85 00000153 48BE-               <3>  mov rsi, %3
+    85 00000155 [6000000000000000]  <3>
+    85                              <3>  syscall_2 %1, %2
+    85 0000015D BF02000000          <4>  mov rdi, %2
+    85                              <4>  syscall_1 %1
+    85 00000162 B801000000          <5>  mov rax, %1
+    85 00000167 0F05                <5>  syscall
+    85                              <1>  print STDERR, "37m ", %1, " "
+    85                              <2>  [section .data]
+    85 000003E0 33376D20556E61626C- <2> %%str: db %2
+    85 000003E9 6520746F206F70656E- <2>
+    85 000003F2 206C6F6F702D636F6E- <2>
+    85 000003FB 74726F6C2064657669- <2>
+    85 00000404 63652120            <2>
+    85                              <2> %%ptr: alignz 16
+    85                              <3> ..@91.ptr: 
+    85 00000408 00<rept>            <3>  align %1, db 0
+    85                              <2>  __SECT__
+    85                              <2> 
+    85                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+    85 00000169 BA28000000          <3>  mov rdx, %4
+    85                              <3>  syscall_3 %1, %2, %3
+    85 0000016E 48BE-               <4>  mov rsi, %3
+    85 00000170 [E003000000000000]  <4>
+    85                              <4>  syscall_2 %1, %2
+    85 00000178 BF02000000          <5>  mov rdi, %2
+    85                              <5>  syscall_1 %1
+    85 0000017D B801000000          <6>  mov rax, %1
+    85 00000182 0F05                <6>  syscall
+    85                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+    85 00000184 BA18000000          <2>  mov rdx, %4
+    85                              <2>  syscall_3 %1, %2, %3
+    85 00000189 48BE-               <3>  mov rsi, %3
+    85 0000018B [6000000000000000]  <3>
+    85                              <3>  syscall_2 %1, %2
+    85 00000193 BF02000000          <4>  mov rdi, %2
+    85                              <4>  syscall_1 %1
+    85 00000198 B801000000          <5>  mov rax, %1
+    85 0000019D 0F05                <5>  syscall
+    85 0000019F E95CFEFFFF          <1>  jmp __abort
+    85                              <1> %%skip:
+    86                                  
+    87 000001A4 48890425[08000000]      	mov	[loopcontrol], rax
+    88                                  
+    89                                  	sys_unlink(loopcontrolfilename)
+    89 000001AC 48BF-               <1>  mov rdi, %2
+    89 000001AE [A003000000000000]  <1>
+    89                              <1>  syscall_1 %1
+    89 000001B6 B857000000          <2>  mov rax, %1
+    89 000001BB 0F05                <2>  syscall
+    90                                  	error_check "Unable to unlink loop-control device!"
+    90 000001BD 4883F800            <1>  cmp rax, 0
+    90 000001C1 7D5E                <1>  jge %%skip
+    90 000001C3 48890425[00000000]  <1>  mov [errno], rax
+    90                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+    90 000001CB BA14000000          <2>  mov rdx, %4
+    90                              <2>  syscall_3 %1, %2, %3
+    90 000001D0 48BE-               <3>  mov rsi, %3
+    90 000001D2 [6000000000000000]  <3>
+    90                              <3>  syscall_2 %1, %2
+    90 000001DA BF02000000          <4>  mov rdi, %2
+    90                              <4>  syscall_1 %1
+    90 000001DF B801000000          <5>  mov rax, %1
+    90 000001E4 0F05                <5>  syscall
+    90                              <1>  print STDERR, "37m ", %1, " "
+    90                              <2>  [section .data]
+    90 00000410 33376D20556E61626C- <2> %%str: db %2
+    90 00000419 6520746F20756E6C69- <2>
+    90 00000422 6E6B206C6F6F702D63- <2>
+    90 0000042B 6F6E74726F6C206465- <2>
+    90 00000434 766963652120        <2>
+    90                              <2> %%ptr: alignz 16
+    90                              <3> ..@110.ptr: 
+    90 0000043A 00<rept>            <3>  align %1, db 0
+    90                              <2>  __SECT__
+    90                              <2> 
+    90                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+    90 000001E6 BA2A000000          <3>  mov rdx, %4
+    90                              <3>  syscall_3 %1, %2, %3
+    90 000001EB 48BE-               <4>  mov rsi, %3
+    90 000001ED [1004000000000000]  <4>
+    90                              <4>  syscall_2 %1, %2
+    90 000001F5 BF02000000          <5>  mov rdi, %2
+    90                              <5>  syscall_1 %1
+    90 000001FA B801000000          <6>  mov rax, %1
+    90 000001FF 0F05                <6>  syscall
+    90                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+    90 00000201 BA18000000          <2>  mov rdx, %4
+    90                              <2>  syscall_3 %1, %2, %3
+    90 00000206 48BE-               <3>  mov rsi, %3
+    90 00000208 [6000000000000000]  <3>
+    90                              <3>  syscall_2 %1, %2
+    90 00000210 BF02000000          <4>  mov rdi, %2
+    90                              <4>  syscall_1 %1
+    90 00000215 B801000000          <5>  mov rax, %1
+    90 0000021A 0F05                <5>  syscall
+    90 0000021C E9DFFDFFFF          <1>  jmp __abort
+    90                              <1> %%skip:
+    91                                  
+    92                                  	[section .data]
+    93 00000440 7372762F726561642D-     usrsquashfsfilename: db "srv/read-only/usr.squashfs", 0
+    93 00000449 6F6E6C792F7573722E-
+    93 00000452 737175617368667300 
+    94                                  	alignz 16
+    94 0000045B 00<rept>            <1>  align %1, db 0
+    95                                  
+    96 00000460 6C6F6F702D75737200      usrloopdevfilename: db "loop-usr", 0
+    97                                  	alignz 16
+    97 00000469 00<rept>            <1>  align %1, db 0
+    98                                  
+    99 00000470 75737200                usrmountpoint: db "usr", 0
+   100                                  	alignz 16
+   100 00000474 00<rept>            <1>  align %1, db 0
+   101                                  	__SECT__
+   102                                  
+   103                                  	[section .bss]
+   104 00000010 <res 00000008>          usrsquashfsfile: resq 1
+   105                                  
+   106 00000018 <res 00000008>          usrloopdev: resq 1
+   107                                  	__SECT__
+   108                                  
+   109                                  _usr:
+   110                                  	print STDOUT, "Mounting /usr..."
+   110                              <1>  [section .data]
+   110 00000480 4D6F756E74696E6720- <1> %%str: db %2
+   110 00000489 2F7573722E2E2E      <1>
+   110                              <1> %%ptr: alignz 16
+   110                              <2> ..@131.ptr: 
+   110                              <2>  align %1, db 0
+   110                              <1>  __SECT__
+   110                              <1> 
+   110                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   110 00000221 BA10000000          <2>  mov rdx, %4
+   110                              <2>  syscall_3 %1, %2, %3
+   110 00000226 48BE-               <3>  mov rsi, %3
+   110 00000228 [8004000000000000]  <3>
+   110                              <3>  syscall_2 %1, %2
+   110 00000230 BF01000000          <4>  mov rdi, %2
+   110                              <4>  syscall_1 %1
+   110 00000235 B801000000          <5>  mov rax, %1
+   110 0000023A 0F05                <5>  syscall
+   111                                  
+   112                                  	sys_open(usrsquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+   112 0000023C BA00000000          <1>  mov rdx, %4
+   112                              <1>  syscall_3 %1, %2, %3
+   112 00000241 BE00000800          <2>  mov rsi, %3
+   112                              <2>  syscall_2 %1, %2
+   112 00000246 48BF-               <3>  mov rdi, %2
+   112 00000248 [4004000000000000]  <3>
+   112                              <3>  syscall_1 %1
+   112 00000250 B802000000          <4>  mov rax, %1
+   112 00000255 0F05                <4>  syscall
+   113 00000257 4883F8FE                	cmp	rax,	ENOENT
+   114 0000025B 7520                    	jne	.0
+   115                                  	print STDOUT, "Unable to find squashfs file, skipping mount."
+   115                              <1>  [section .data]
+   115 00000490 556E61626C6520746F- <1> %%str: db %2
+   115 00000499 2066696E6420737175- <1>
+   115 000004A2 61736866732066696C- <1>
+   115 000004AB 652C20736B69707069- <1>
+   115 000004B4 6E67206D6F756E742E  <1>
+   115                              <1> %%ptr: alignz 16
+   115                              <2> ..@143.ptr: 
+   115 000004BD 00<rept>            <2>  align %1, db 0
+   115                              <1>  __SECT__
+   115                              <1> 
+   115                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   115 0000025D BA2D000000          <2>  mov rdx, %4
+   115                              <2>  syscall_3 %1, %2, %3
+   115 00000262 48BE-               <3>  mov rsi, %3
+   115 00000264 [9004000000000000]  <3>
+   115                              <3>  syscall_2 %1, %2
+   115 0000026C BF01000000          <4>  mov rdi, %2
+   115                              <4>  syscall_1 %1
+   115 00000271 B801000000          <5>  mov rax, %1
+   115 00000276 0F05                <5>  syscall
+   116 00000278 E974040000              	jmp	.skip
+   117                                  .0:	error_check "Unable to open squashfs file!"
+   117                              <1> .0: 
+   117 0000027D 4883F800            <1>  cmp rax, 0
+   117 00000281 7D5E                <1>  jge %%skip
+   117 00000283 48890425[00000000]  <1>  mov [errno], rax
+   117                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   117 0000028B BA14000000          <2>  mov rdx, %4
+   117                              <2>  syscall_3 %1, %2, %3
+   117 00000290 48BE-               <3>  mov rsi, %3
+   117 00000292 [6000000000000000]  <3>
+   117                              <3>  syscall_2 %1, %2
+   117 0000029A BF02000000          <4>  mov rdi, %2
+   117                              <4>  syscall_1 %1
+   117 0000029F B801000000          <5>  mov rax, %1
+   117 000002A4 0F05                <5>  syscall
+   117                              <1>  print STDERR, "37m ", %1, " "
+   117                              <2>  [section .data]
+   117 000004C0 33376D20556E61626C- <2> %%str: db %2
+   117 000004C9 6520746F206F70656E- <2>
+   117 000004D2 207371756173686673- <2>
+   117 000004DB 2066696C652120      <2>
+   117                              <2> %%ptr: alignz 16
+   117                              <3> ..@156.ptr: 
+   117 000004E2 00<rept>            <3>  align %1, db 0
+   117                              <2>  __SECT__
+   117                              <2> 
+   117                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   117 000002A6 BA22000000          <3>  mov rdx, %4
+   117                              <3>  syscall_3 %1, %2, %3
+   117 000002AB 48BE-               <4>  mov rsi, %3
+   117 000002AD [C004000000000000]  <4>
+   117                              <4>  syscall_2 %1, %2
+   117 000002B5 BF02000000          <5>  mov rdi, %2
+   117                              <5>  syscall_1 %1
+   117 000002BA B801000000          <6>  mov rax, %1
+   117 000002BF 0F05                <6>  syscall
+   117                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   117 000002C1 BA18000000          <2>  mov rdx, %4
+   117                              <2>  syscall_3 %1, %2, %3
+   117 000002C6 48BE-               <3>  mov rsi, %3
+   117 000002C8 [6000000000000000]  <3>
+   117                              <3>  syscall_2 %1, %2
+   117 000002D0 BF02000000          <4>  mov rdi, %2
+   117                              <4>  syscall_1 %1
+   117 000002D5 B801000000          <5>  mov rax, %1
+   117 000002DA 0F05                <5>  syscall
+   117 000002DC E91FFDFFFF          <1>  jmp __abort
+   117                              <1> %%skip:
+   118                                  
+   119 000002E1 48890425[10000000]      	mov	[usrsquashfsfile], rax
+   120                                  
+   121                                  	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+   121 000002E9 BA00000000          <1>  mov rdx, %4
+   121                              <1>  syscall_3 %1, %2, %3
+   121 000002EE BE824C0000          <2>  mov rsi, %3
+   121                              <2>  syscall_2 %1, %2
+   121 000002F3 488B3C25[08000000]  <3>  mov rdi, %2
+   121                              <3>  syscall_1 %1
+   121 000002FB B810000000          <4>  mov rax, %1
+   121 00000300 0F05                <4>  syscall
+   122                                  	error_check "Unable to allocate loopback device!"
+   122 00000302 4883F800            <1>  cmp rax, 0
+   122 00000306 7D5E                <1>  jge %%skip
+   122 00000308 48890425[00000000]  <1>  mov [errno], rax
+   122                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   122 00000310 BA14000000          <2>  mov rdx, %4
+   122                              <2>  syscall_3 %1, %2, %3
+   122 00000315 48BE-               <3>  mov rsi, %3
+   122 00000317 [6000000000000000]  <3>
+   122                              <3>  syscall_2 %1, %2
+   122 0000031F BF02000000          <4>  mov rdi, %2
+   122                              <4>  syscall_1 %1
+   122 00000324 B801000000          <5>  mov rax, %1
+   122 00000329 0F05                <5>  syscall
+   122                              <1>  print STDERR, "37m ", %1, " "
+   122                              <2>  [section .data]
+   122 000004F0 33376D20556E61626C- <2> %%str: db %2
+   122 000004F9 6520746F20616C6C6F- <2>
+   122 00000502 63617465206C6F6F70- <2>
+   122 0000050B 6261636B2064657669- <2>
+   122 00000514 63652120            <2>
+   122                              <2> %%ptr: alignz 16
+   122                              <3> ..@177.ptr: 
+   122 00000518 00<rept>            <3>  align %1, db 0
+   122                              <2>  __SECT__
+   122                              <2> 
+   122                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   122 0000032B BA28000000          <3>  mov rdx, %4
+   122                              <3>  syscall_3 %1, %2, %3
+   122 00000330 48BE-               <4>  mov rsi, %3
+   122 00000332 [F004000000000000]  <4>
+   122                              <4>  syscall_2 %1, %2
+   122 0000033A BF02000000          <5>  mov rdi, %2
+   122                              <5>  syscall_1 %1
+   122 0000033F B801000000          <6>  mov rax, %1
+   122 00000344 0F05                <6>  syscall
+   122                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   122 00000346 BA18000000          <2>  mov rdx, %4
+   122                              <2>  syscall_3 %1, %2, %3
+   122 0000034B 48BE-               <3>  mov rsi, %3
+   122 0000034D [6000000000000000]  <3>
+   122                              <3>  syscall_2 %1, %2
+   122 00000355 BF02000000          <4>  mov rdi, %2
+   122                              <4>  syscall_1 %1
+   122 0000035A B801000000          <5>  mov rax, %1
+   122 0000035F 0F05                <5>  syscall
+   122 00000361 E99AFCFFFF          <1>  jmp __abort
+   122                              <1> %%skip:
+   123                                  
+   124 00000366 480D00070000            	or	rax,	7 << 8
+   125 0000036C 48890425[18000000]      	mov	[usrloopdev], rax
+   126                                  
+   127                                  	sys_mknod(usrloopdevfilename, S_IFBLK | 0600O, [usrloopdev])
+   127 00000374 488B1425[18000000]  <1>  mov rdx, %4
+   127                              <1>  syscall_3 %1, %2, %3
+   127 0000037C BE80610000          <2>  mov rsi, %3
+   127                              <2>  syscall_2 %1, %2
+   127 00000381 48BF-               <3>  mov rdi, %2
+   127 00000383 [6004000000000000]  <3>
+   127                              <3>  syscall_1 %1
+   127 0000038B B885000000          <4>  mov rax, %1
+   127 00000390 0F05                <4>  syscall
+   128                                  	error_check "Unable to create loopback device!"
+   128 00000392 4883F800            <1>  cmp rax, 0
+   128 00000396 7D5E                <1>  jge %%skip
+   128 00000398 48890425[00000000]  <1>  mov [errno], rax
+   128                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   128 000003A0 BA14000000          <2>  mov rdx, %4
+   128                              <2>  syscall_3 %1, %2, %3
+   128 000003A5 48BE-               <3>  mov rsi, %3
+   128 000003A7 [6000000000000000]  <3>
+   128                              <3>  syscall_2 %1, %2
+   128 000003AF BF02000000          <4>  mov rdi, %2
+   128                              <4>  syscall_1 %1
+   128 000003B4 B801000000          <5>  mov rax, %1
+   128 000003B9 0F05                <5>  syscall
+   128                              <1>  print STDERR, "37m ", %1, " "
+   128                              <2>  [section .data]
+   128 00000520 33376D20556E61626C- <2> %%str: db %2
+   128 00000529 6520746F2063726561- <2>
+   128 00000532 7465206C6F6F706261- <2>
+   128 0000053B 636B20646576696365- <2>
+   128 00000544 2120                <2>
+   128                              <2> %%ptr: alignz 16
+   128                              <3> ..@198.ptr: 
+   128 00000546 00<rept>            <3>  align %1, db 0
+   128                              <2>  __SECT__
+   128                              <2> 
+   128                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   128 000003BB BA26000000          <3>  mov rdx, %4
+   128                              <3>  syscall_3 %1, %2, %3
+   128 000003C0 48BE-               <4>  mov rsi, %3
+   128 000003C2 [2005000000000000]  <4>
+   128                              <4>  syscall_2 %1, %2
+   128 000003CA BF02000000          <5>  mov rdi, %2
+   128                              <5>  syscall_1 %1
+   128 000003CF B801000000          <6>  mov rax, %1
+   128 000003D4 0F05                <6>  syscall
+   128                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   128 000003D6 BA18000000          <2>  mov rdx, %4
+   128                              <2>  syscall_3 %1, %2, %3
+   128 000003DB 48BE-               <3>  mov rsi, %3
+   128 000003DD [6000000000000000]  <3>
+   128                              <3>  syscall_2 %1, %2
+   128 000003E5 BF02000000          <4>  mov rdi, %2
+   128                              <4>  syscall_1 %1
+   128 000003EA B801000000          <5>  mov rax, %1
+   128 000003EF 0F05                <5>  syscall
+   128 000003F1 E90AFCFFFF          <1>  jmp __abort
+   128                              <1> %%skip:
+   129                                  
+   130                                  	sys_open(usrloopdevfilename, O_CLOEXEC | O_RDWR, 0)
+   130 000003F6 BA00000000          <1>  mov rdx, %4
+   130                              <1>  syscall_3 %1, %2, %3
+   130 000003FB BE02000800          <2>  mov rsi, %3
+   130                              <2>  syscall_2 %1, %2
+   130 00000400 48BF-               <3>  mov rdi, %2
+   130 00000402 [6004000000000000]  <3>
+   130                              <3>  syscall_1 %1
+   130 0000040A B802000000          <4>  mov rax, %1
+   130 0000040F 0F05                <4>  syscall
+   131                                  	error_check "Unable to open loopback device!"
+   131 00000411 4883F800            <1>  cmp rax, 0
+   131 00000415 7D5E                <1>  jge %%skip
+   131 00000417 48890425[00000000]  <1>  mov [errno], rax
+   131                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   131 0000041F BA14000000          <2>  mov rdx, %4
+   131                              <2>  syscall_3 %1, %2, %3
+   131 00000424 48BE-               <3>  mov rsi, %3
+   131 00000426 [6000000000000000]  <3>
+   131                              <3>  syscall_2 %1, %2
+   131 0000042E BF02000000          <4>  mov rdi, %2
+   131                              <4>  syscall_1 %1
+   131 00000433 B801000000          <5>  mov rax, %1
+   131 00000438 0F05                <5>  syscall
+   131                              <1>  print STDERR, "37m ", %1, " "
+   131                              <2>  [section .data]
+   131 00000550 33376D20556E61626C- <2> %%str: db %2
+   131 00000559 6520746F206F70656E- <2>
+   131 00000562 206C6F6F706261636B- <2>
+   131 0000056B 206465766963652120  <2>
+   131                              <2> %%ptr: alignz 16
+   131                              <3> ..@219.ptr: 
+   131 00000574 00<rept>            <3>  align %1, db 0
+   131                              <2>  __SECT__
+   131                              <2> 
+   131                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   131 0000043A BA24000000          <3>  mov rdx, %4
+   131                              <3>  syscall_3 %1, %2, %3
+   131 0000043F 48BE-               <4>  mov rsi, %3
+   131 00000441 [5005000000000000]  <4>
+   131                              <4>  syscall_2 %1, %2
+   131 00000449 BF02000000          <5>  mov rdi, %2
+   131                              <5>  syscall_1 %1
+   131 0000044E B801000000          <6>  mov rax, %1
+   131 00000453 0F05                <6>  syscall
+   131                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   131 00000455 BA18000000          <2>  mov rdx, %4
+   131                              <2>  syscall_3 %1, %2, %3
+   131 0000045A 48BE-               <3>  mov rsi, %3
+   131 0000045C [6000000000000000]  <3>
+   131                              <3>  syscall_2 %1, %2
+   131 00000464 BF02000000          <4>  mov rdi, %2
+   131                              <4>  syscall_1 %1
+   131 00000469 B801000000          <5>  mov rax, %1
+   131 0000046E 0F05                <5>  syscall
+   131 00000470 E98BFBFFFF          <1>  jmp __abort
+   131                              <1> %%skip:
+   132                                  
+   133 00000475 48890425[18000000]      	mov	[usrloopdev], rax
+   134                                  
+   135                                  	sys_ioctl([usrloopdev], LOOP_SET_FD, [usrsquashfsfile])
+   135 0000047D 488B1425[10000000]  <1>  mov rdx, %4
+   135                              <1>  syscall_3 %1, %2, %3
+   135 00000485 BE004C0000          <2>  mov rsi, %3
+   135                              <2>  syscall_2 %1, %2
+   135 0000048A 488B3C25[18000000]  <3>  mov rdi, %2
+   135                              <3>  syscall_1 %1
+   135 00000492 B810000000          <4>  mov rax, %1
+   135 00000497 0F05                <4>  syscall
+   136                                  	error_check "Unable to attach squashfs to loopback device!"
+   136 00000499 4883F800            <1>  cmp rax, 0
+   136 0000049D 7D5E                <1>  jge %%skip
+   136 0000049F 48890425[00000000]  <1>  mov [errno], rax
+   136                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   136 000004A7 BA14000000          <2>  mov rdx, %4
+   136                              <2>  syscall_3 %1, %2, %3
+   136 000004AC 48BE-               <3>  mov rsi, %3
+   136 000004AE [6000000000000000]  <3>
+   136                              <3>  syscall_2 %1, %2
+   136 000004B6 BF02000000          <4>  mov rdi, %2
+   136                              <4>  syscall_1 %1
+   136 000004BB B801000000          <5>  mov rax, %1
+   136 000004C0 0F05                <5>  syscall
+   136                              <1>  print STDERR, "37m ", %1, " "
+   136                              <2>  [section .data]
+   136 00000580 33376D20556E61626C- <2> %%str: db %2
+   136 00000589 6520746F2061747461- <2>
+   136 00000592 636820737175617368- <2>
+   136 0000059B 667320746F206C6F6F- <2>
+   136 000005A4 706261636B20646576- <2>
+   136 000005AD 6963652120          <2>
+   136                              <2> %%ptr: alignz 16
+   136                              <3> ..@240.ptr: 
+   136 000005B2 00<rept>            <3>  align %1, db 0
+   136                              <2>  __SECT__
+   136                              <2> 
+   136                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   136 000004C2 BA32000000          <3>  mov rdx, %4
+   136                              <3>  syscall_3 %1, %2, %3
+   136 000004C7 48BE-               <4>  mov rsi, %3
+   136 000004C9 [8005000000000000]  <4>
+   136                              <4>  syscall_2 %1, %2
+   136 000004D1 BF02000000          <5>  mov rdi, %2
+   136                              <5>  syscall_1 %1
+   136 000004D6 B801000000          <6>  mov rax, %1
+   136 000004DB 0F05                <6>  syscall
+   136                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   136 000004DD BA18000000          <2>  mov rdx, %4
+   136                              <2>  syscall_3 %1, %2, %3
+   136 000004E2 48BE-               <3>  mov rsi, %3
+   136 000004E4 [6000000000000000]  <3>
+   136                              <3>  syscall_2 %1, %2
+   136 000004EC BF02000000          <4>  mov rdi, %2
+   136                              <4>  syscall_1 %1
+   136 000004F1 B801000000          <5>  mov rax, %1
+   136 000004F6 0F05                <5>  syscall
+   136 000004F8 E903FBFFFF          <1>  jmp __abort
+   136                              <1> %%skip:
+   137                                  
+   138                                  	sys_close([usrsquashfsfile])
+   138 000004FD 488B3C25[10000000]  <1>  mov rdi, %2
+   138                              <1>  syscall_1 %1
+   138 00000505 B803000000          <2>  mov rax, %1
+   138 0000050A 0F05                <2>  syscall
+   139                                  	error_check "Unable to close squashfs file!"
+   139 0000050C 4883F800            <1>  cmp rax, 0
+   139 00000510 7D5E                <1>  jge %%skip
+   139 00000512 48890425[00000000]  <1>  mov [errno], rax
+   139                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   139 0000051A BA14000000          <2>  mov rdx, %4
+   139                              <2>  syscall_3 %1, %2, %3
+   139 0000051F 48BE-               <3>  mov rsi, %3
+   139 00000521 [6000000000000000]  <3>
+   139                              <3>  syscall_2 %1, %2
+   139 00000529 BF02000000          <4>  mov rdi, %2
+   139                              <4>  syscall_1 %1
+   139 0000052E B801000000          <5>  mov rax, %1
+   139 00000533 0F05                <5>  syscall
+   139                              <1>  print STDERR, "37m ", %1, " "
+   139                              <2>  [section .data]
+   139 000005C0 33376D20556E61626C- <2> %%str: db %2
+   139 000005C9 6520746F20636C6F73- <2>
+   139 000005D2 652073717561736866- <2>
+   139 000005DB 732066696C652120    <2>
+   139                              <2> %%ptr: alignz 16
+   139                              <3> ..@259.ptr: 
+   139 000005E3 00<rept>            <3>  align %1, db 0
+   139                              <2>  __SECT__
+   139                              <2> 
+   139                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   139 00000535 BA23000000          <3>  mov rdx, %4
+   139                              <3>  syscall_3 %1, %2, %3
+   139 0000053A 48BE-               <4>  mov rsi, %3
+   139 0000053C [C005000000000000]  <4>
+   139                              <4>  syscall_2 %1, %2
+   139 00000544 BF02000000          <5>  mov rdi, %2
+   139                              <5>  syscall_1 %1
+   139 00000549 B801000000          <6>  mov rax, %1
+   139 0000054E 0F05                <6>  syscall
+   139                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   139 00000550 BA18000000          <2>  mov rdx, %4
+   139                              <2>  syscall_3 %1, %2, %3
+   139 00000555 48BE-               <3>  mov rsi, %3
+   139 00000557 [6000000000000000]  <3>
+   139                              <3>  syscall_2 %1, %2
+   139 0000055F BF02000000          <4>  mov rdi, %2
+   139                              <4>  syscall_1 %1
+   139 00000564 B801000000          <5>  mov rax, %1
+   139 00000569 0F05                <5>  syscall
+   139 0000056B E990FAFFFF          <1>  jmp __abort
+   139                              <1> %%skip:
+   140                                  
+   141                                  	sys_close([usrloopdev])
+   141 00000570 488B3C25[18000000]  <1>  mov rdi, %2
+   141                              <1>  syscall_1 %1
+   141 00000578 B803000000          <2>  mov rax, %1
+   141 0000057D 0F05                <2>  syscall
+   142                                  	error_check "Unable to close loopback device!"
+   142 0000057F 4883F800            <1>  cmp rax, 0
+   142 00000583 7D5E                <1>  jge %%skip
+   142 00000585 48890425[00000000]  <1>  mov [errno], rax
+   142                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   142 0000058D BA14000000          <2>  mov rdx, %4
+   142                              <2>  syscall_3 %1, %2, %3
+   142 00000592 48BE-               <3>  mov rsi, %3
+   142 00000594 [6000000000000000]  <3>
+   142                              <3>  syscall_2 %1, %2
+   142 0000059C BF02000000          <4>  mov rdi, %2
+   142                              <4>  syscall_1 %1
+   142 000005A1 B801000000          <5>  mov rax, %1
+   142 000005A6 0F05                <5>  syscall
+   142                              <1>  print STDERR, "37m ", %1, " "
+   142                              <2>  [section .data]
+   142 000005F0 33376D20556E61626C- <2> %%str: db %2
+   142 000005F9 6520746F20636C6F73- <2>
+   142 00000602 65206C6F6F70626163- <2>
+   142 0000060B 6B2064657669636521- <2>
+   142 00000614 20                  <2>
+   142                              <2> %%ptr: alignz 16
+   142                              <3> ..@278.ptr: 
+   142 00000615 00<rept>            <3>  align %1, db 0
+   142                              <2>  __SECT__
+   142                              <2> 
+   142                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   142 000005A8 BA25000000          <3>  mov rdx, %4
+   142                              <3>  syscall_3 %1, %2, %3
+   142 000005AD 48BE-               <4>  mov rsi, %3
+   142 000005AF [F005000000000000]  <4>
+   142                              <4>  syscall_2 %1, %2
+   142 000005B7 BF02000000          <5>  mov rdi, %2
+   142                              <5>  syscall_1 %1
+   142 000005BC B801000000          <6>  mov rax, %1
+   142 000005C1 0F05                <6>  syscall
+   142                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   142 000005C3 BA18000000          <2>  mov rdx, %4
+   142                              <2>  syscall_3 %1, %2, %3
+   142 000005C8 48BE-               <3>  mov rsi, %3
+   142 000005CA [6000000000000000]  <3>
+   142                              <3>  syscall_2 %1, %2
+   142 000005D2 BF02000000          <4>  mov rdi, %2
+   142                              <4>  syscall_1 %1
+   142 000005D7 B801000000          <5>  mov rax, %1
+   142 000005DC 0F05                <5>  syscall
+   142 000005DE E91DFAFFFF          <1>  jmp __abort
+   142                              <1> %%skip:
+   143                                  
+   144                                  	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, MS_RDONLY, nullstring)
+   144 000005E3 49B8-               <1>  mov r8, %6
+   144 000005E5 [1000000000000000]  <1>
+   144                              <1>  syscall_5 %1, %2, %3, %4, %5
+   144 000005ED 41BA01000000        <2>  mov r10, %5
+   144                              <2>  syscall_4 %1, %2, %3, %4
+   144 000005F3 48BA-               <3>  mov rdx, %4
+   144 000005F5 [0000000000000000]  <3>
+   144                              <3>  syscall_3 %1, %2, %3
+   144 000005FD 48BE-               <4>  mov rsi, %3
+   144 000005FF [7004000000000000]  <4>
+   144                              <4>  syscall_2 %1, %2
+   144 00000607 48BF-               <5>  mov rdi, %2
+   144 00000609 [6004000000000000]  <5>
+   144                              <5>  syscall_1 %1
+   144 00000611 B8A5000000          <6>  mov rax, %1
+   144 00000616 0F05                <6>  syscall
+   145                                  	error_check "Unable to mount /usr!"
+   145 00000618 4883F800            <1>  cmp rax, 0
+   145 0000061C 7D5E                <1>  jge %%skip
+   145 0000061E 48890425[00000000]  <1>  mov [errno], rax
+   145                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   145 00000626 BA14000000          <2>  mov rdx, %4
+   145                              <2>  syscall_3 %1, %2, %3
+   145 0000062B 48BE-               <3>  mov rsi, %3
+   145 0000062D [6000000000000000]  <3>
+   145                              <3>  syscall_2 %1, %2
+   145 00000635 BF02000000          <4>  mov rdi, %2
+   145                              <4>  syscall_1 %1
+   145 0000063A B801000000          <5>  mov rax, %1
+   145 0000063F 0F05                <5>  syscall
+   145                              <1>  print STDERR, "37m ", %1, " "
+   145                              <2>  [section .data]
+   145 00000620 33376D20556E61626C- <2> %%str: db %2
+   145 00000629 6520746F206D6F756E- <2>
+   145 00000632 74202F7573722120    <2>
+   145                              <2> %%ptr: alignz 16
+   145                              <3> ..@301.ptr: 
+   145 0000063A 00<rept>            <3>  align %1, db 0
+   145                              <2>  __SECT__
+   145                              <2> 
+   145                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   145 00000641 BA1A000000          <3>  mov rdx, %4
+   145                              <3>  syscall_3 %1, %2, %3
+   145 00000646 48BE-               <4>  mov rsi, %3
+   145 00000648 [2006000000000000]  <4>
+   145                              <4>  syscall_2 %1, %2
+   145 00000650 BF02000000          <5>  mov rdi, %2
+   145                              <5>  syscall_1 %1
+   145 00000655 B801000000          <6>  mov rax, %1
+   145 0000065A 0F05                <6>  syscall
+   145                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   145 0000065C BA18000000          <2>  mov rdx, %4
+   145                              <2>  syscall_3 %1, %2, %3
+   145 00000661 48BE-               <3>  mov rsi, %3
+   145 00000663 [6000000000000000]  <3>
+   145                              <3>  syscall_2 %1, %2
+   145 0000066B BF02000000          <4>  mov rdi, %2
+   145                              <4>  syscall_1 %1
+   145 00000670 B801000000          <5>  mov rax, %1
+   145 00000675 0F05                <5>  syscall
+   145 00000677 E984F9FFFF          <1>  jmp __abort
+   145                              <1> %%skip:
+   146                                  
+   147                                  	sys_unlink(usrloopdevfilename)
+   147 0000067C 48BF-               <1>  mov rdi, %2
+   147 0000067E [6004000000000000]  <1>
+   147                              <1>  syscall_1 %1
+   147 00000686 B857000000          <2>  mov rax, %1
+   147 0000068B 0F05                <2>  syscall
+   148                                  	error_check "Unable to unlink loopback device!"
+   148 0000068D 4883F800            <1>  cmp rax, 0
+   148 00000691 7D5E                <1>  jge %%skip
+   148 00000693 48890425[00000000]  <1>  mov [errno], rax
+   148                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   148 0000069B BA14000000          <2>  mov rdx, %4
+   148                              <2>  syscall_3 %1, %2, %3
+   148 000006A0 48BE-               <3>  mov rsi, %3
+   148 000006A2 [6000000000000000]  <3>
+   148                              <3>  syscall_2 %1, %2
+   148 000006AA BF02000000          <4>  mov rdi, %2
+   148                              <4>  syscall_1 %1
+   148 000006AF B801000000          <5>  mov rax, %1
+   148 000006B4 0F05                <5>  syscall
+   148                              <1>  print STDERR, "37m ", %1, " "
+   148                              <2>  [section .data]
+   148 00000640 33376D20556E61626C- <2> %%str: db %2
+   148 00000649 6520746F20756E6C69- <2>
+   148 00000652 6E6B206C6F6F706261- <2>
+   148 0000065B 636B20646576696365- <2>
+   148 00000664 2120                <2>
+   148                              <2> %%ptr: alignz 16
+   148                              <3> ..@320.ptr: 
+   148 00000666 00<rept>            <3>  align %1, db 0
+   148                              <2>  __SECT__
+   148                              <2> 
+   148                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   148 000006B6 BA26000000          <3>  mov rdx, %4
+   148                              <3>  syscall_3 %1, %2, %3
+   148 000006BB 48BE-               <4>  mov rsi, %3
+   148 000006BD [4006000000000000]  <4>
+   148                              <4>  syscall_2 %1, %2
+   148 000006C5 BF02000000          <5>  mov rdi, %2
+   148                              <5>  syscall_1 %1
+   148 000006CA B801000000          <6>  mov rax, %1
+   148 000006CF 0F05                <6>  syscall
+   148                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   148 000006D1 BA18000000          <2>  mov rdx, %4
+   148                              <2>  syscall_3 %1, %2, %3
+   148 000006D6 48BE-               <3>  mov rsi, %3
+   148 000006D8 [6000000000000000]  <3>
+   148                              <3>  syscall_2 %1, %2
+   148 000006E0 BF02000000          <4>  mov rdi, %2
+   148                              <4>  syscall_1 %1
+   148 000006E5 B801000000          <5>  mov rax, %1
+   148 000006EA 0F05                <5>  syscall
+   148 000006EC E90FF9FFFF          <1>  jmp __abort
+   148                              <1> %%skip:
+   149                                  .skip:
+   150                                  	print STDOUT, 10, 13
+   150                              <1>  [section .data]
+   150 00000670 0A0D                <1> %%str: db %2
+   150                              <1> %%ptr: alignz 16
+   150                              <2> ..@332.ptr: 
+   150 00000672 00<rept>            <2>  align %1, db 0
+   150                              <1>  __SECT__
+   150                              <1> 
+   150                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   150 000006F1 BA02000000          <2>  mov rdx, %4
+   150                              <2>  syscall_3 %1, %2, %3
+   150 000006F6 48BE-               <3>  mov rsi, %3
+   150 000006F8 [7006000000000000]  <3>
+   150                              <3>  syscall_2 %1, %2
+   150 00000700 BF01000000          <4>  mov rdi, %2
+   150                              <4>  syscall_1 %1
+   150 00000705 B801000000          <5>  mov rax, %1
+   150 0000070A 0F05                <5>  syscall
+   151                                  
+   152                                  
+   153                                  
+   154                                  	[section .data]
+   155 00000680 7372762F726561642D-     lib64squashfsfilename: db "srv/read-only/lib64.squashfs", 0
+   155 00000689 6F6E6C792F6C696236-
+   155 00000692 342E73717561736866-
+   155 0000069B 7300               
+   156                                  	alignz 16
+   156 0000069D 00<rept>            <1>  align %1, db 0
+   157                                  
+   158 000006A0 6C6F6F702D6C696236-     lib64loopdevfilename: db "loop-lib64", 0
+   158 000006A9 3400               
+   159                                  	alignz 16
+   159 000006AB 00<rept>            <1>  align %1, db 0
+   160                                  
+   161 000006B0 6C696236342F00          lib64mountpoint: db "lib64/", 0
+   162                                  	alignz 16
+   162 000006B7 00<rept>            <1>  align %1, db 0
+   163                                  	__SECT__
+   164                                  
+   165                                  	[section .bss]
+   166 00000020 <res 00000008>          lib64squashfsfile: resq 1
+   167                                  
+   168 00000028 <res 00000008>          lib64loopdev: resq 1
+   169                                  	__SECT__
+   170                                  
+   171                                  _lib64:
+   172                                  	print STDOUT, "Mounting /lib64..."
+   172                              <1>  [section .data]
+   172 000006C0 4D6F756E74696E6720- <1> %%str: db %2
+   172 000006C9 2F6C696236342E2E2E  <1>
+   172                              <1> %%ptr: alignz 16
+   172                              <2> ..@349.ptr: 
+   172 000006D2 00<rept>            <2>  align %1, db 0
+   172                              <1>  __SECT__
+   172                              <1> 
+   172                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   172 0000070C BA12000000          <2>  mov rdx, %4
+   172                              <2>  syscall_3 %1, %2, %3
+   172 00000711 48BE-               <3>  mov rsi, %3
+   172 00000713 [C006000000000000]  <3>
+   172                              <3>  syscall_2 %1, %2
+   172 0000071B BF01000000          <4>  mov rdi, %2
+   172                              <4>  syscall_1 %1
+   172 00000720 B801000000          <5>  mov rax, %1
+   172 00000725 0F05                <5>  syscall
+   173                                  
+   174                                  	sys_open(lib64squashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+   174 00000727 BA00000000          <1>  mov rdx, %4
+   174                              <1>  syscall_3 %1, %2, %3
+   174 0000072C BE00000800          <2>  mov rsi, %3
+   174                              <2>  syscall_2 %1, %2
+   174 00000731 48BF-               <3>  mov rdi, %2
+   174 00000733 [8006000000000000]  <3>
+   174                              <3>  syscall_1 %1
+   174 0000073B B802000000          <4>  mov rax, %1
+   174 00000740 0F05                <4>  syscall
+   175 00000742 4883F8FE                	cmp	rax,	ENOENT
+   176 00000746 7520                    	jne	.0
+   177                                  	print STDOUT, "Unable to find squashfs file, skipping mount."
+   177                              <1>  [section .data]
+   177 000006E0 556E61626C6520746F- <1> %%str: db %2
+   177 000006E9 2066696E6420737175- <1>
+   177 000006F2 61736866732066696C- <1>
+   177 000006FB 652C20736B69707069- <1>
+   177 00000704 6E67206D6F756E742E  <1>
+   177                              <1> %%ptr: alignz 16
+   177                              <2> ..@361.ptr: 
+   177 0000070D 00<rept>            <2>  align %1, db 0
+   177                              <1>  __SECT__
+   177                              <1> 
+   177                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   177 00000748 BA2D000000          <2>  mov rdx, %4
+   177                              <2>  syscall_3 %1, %2, %3
+   177 0000074D 48BE-               <3>  mov rsi, %3
+   177 0000074F [E006000000000000]  <3>
+   177                              <3>  syscall_2 %1, %2
+   177 00000757 BF01000000          <4>  mov rdi, %2
+   177                              <4>  syscall_1 %1
+   177 0000075C B801000000          <5>  mov rax, %1
+   177 00000761 0F05                <5>  syscall
+   178 00000763 E974040000              	jmp	.skip
+   179                                  .0:	error_check "Unable to open squashfs file!"
+   179                              <1> .0: 
+   179 00000768 4883F800            <1>  cmp rax, 0
+   179 0000076C 7D5E                <1>  jge %%skip
+   179 0000076E 48890425[00000000]  <1>  mov [errno], rax
+   179                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   179 00000776 BA14000000          <2>  mov rdx, %4
+   179                              <2>  syscall_3 %1, %2, %3
+   179 0000077B 48BE-               <3>  mov rsi, %3
+   179 0000077D [6000000000000000]  <3>
+   179                              <3>  syscall_2 %1, %2
+   179 00000785 BF02000000          <4>  mov rdi, %2
+   179                              <4>  syscall_1 %1
+   179 0000078A B801000000          <5>  mov rax, %1
+   179 0000078F 0F05                <5>  syscall
+   179                              <1>  print STDERR, "37m ", %1, " "
+   179                              <2>  [section .data]
+   179 00000710 33376D20556E61626C- <2> %%str: db %2
+   179 00000719 6520746F206F70656E- <2>
+   179 00000722 207371756173686673- <2>
+   179 0000072B 2066696C652120      <2>
+   179                              <2> %%ptr: alignz 16
+   179                              <3> ..@374.ptr: 
+   179 00000732 00<rept>            <3>  align %1, db 0
+   179                              <2>  __SECT__
+   179                              <2> 
+   179                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   179 00000791 BA22000000          <3>  mov rdx, %4
+   179                              <3>  syscall_3 %1, %2, %3
+   179 00000796 48BE-               <4>  mov rsi, %3
+   179 00000798 [1007000000000000]  <4>
+   179                              <4>  syscall_2 %1, %2
+   179 000007A0 BF02000000          <5>  mov rdi, %2
+   179                              <5>  syscall_1 %1
+   179 000007A5 B801000000          <6>  mov rax, %1
+   179 000007AA 0F05                <6>  syscall
+   179                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   179 000007AC BA18000000          <2>  mov rdx, %4
+   179                              <2>  syscall_3 %1, %2, %3
+   179 000007B1 48BE-               <3>  mov rsi, %3
+   179 000007B3 [6000000000000000]  <3>
+   179                              <3>  syscall_2 %1, %2
+   179 000007BB BF02000000          <4>  mov rdi, %2
+   179                              <4>  syscall_1 %1
+   179 000007C0 B801000000          <5>  mov rax, %1
+   179 000007C5 0F05                <5>  syscall
+   179 000007C7 E934F8FFFF          <1>  jmp __abort
+   179                              <1> %%skip:
+   180                                  
+   181 000007CC 48890425[20000000]      	mov	[lib64squashfsfile], rax
+   182                                  
+   183                                  	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+   183 000007D4 BA00000000          <1>  mov rdx, %4
+   183                              <1>  syscall_3 %1, %2, %3
+   183 000007D9 BE824C0000          <2>  mov rsi, %3
+   183                              <2>  syscall_2 %1, %2
+   183 000007DE 488B3C25[08000000]  <3>  mov rdi, %2
+   183                              <3>  syscall_1 %1
+   183 000007E6 B810000000          <4>  mov rax, %1
+   183 000007EB 0F05                <4>  syscall
+   184                                  	error_check "Unable to allocate loopback device!"
+   184 000007ED 4883F800            <1>  cmp rax, 0
+   184 000007F1 7D5E                <1>  jge %%skip
+   184 000007F3 48890425[00000000]  <1>  mov [errno], rax
+   184                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   184 000007FB BA14000000          <2>  mov rdx, %4
+   184                              <2>  syscall_3 %1, %2, %3
+   184 00000800 48BE-               <3>  mov rsi, %3
+   184 00000802 [6000000000000000]  <3>
+   184                              <3>  syscall_2 %1, %2
+   184 0000080A BF02000000          <4>  mov rdi, %2
+   184                              <4>  syscall_1 %1
+   184 0000080F B801000000          <5>  mov rax, %1
+   184 00000814 0F05                <5>  syscall
+   184                              <1>  print STDERR, "37m ", %1, " "
+   184                              <2>  [section .data]
+   184 00000740 33376D20556E61626C- <2> %%str: db %2
+   184 00000749 6520746F20616C6C6F- <2>
+   184 00000752 63617465206C6F6F70- <2>
+   184 0000075B 6261636B2064657669- <2>
+   184 00000764 63652120            <2>
+   184                              <2> %%ptr: alignz 16
+   184                              <3> ..@395.ptr: 
+   184 00000768 00<rept>            <3>  align %1, db 0
+   184                              <2>  __SECT__
+   184                              <2> 
+   184                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   184 00000816 BA28000000          <3>  mov rdx, %4
+   184                              <3>  syscall_3 %1, %2, %3
+   184 0000081B 48BE-               <4>  mov rsi, %3
+   184 0000081D [4007000000000000]  <4>
+   184                              <4>  syscall_2 %1, %2
+   184 00000825 BF02000000          <5>  mov rdi, %2
+   184                              <5>  syscall_1 %1
+   184 0000082A B801000000          <6>  mov rax, %1
+   184 0000082F 0F05                <6>  syscall
+   184                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   184 00000831 BA18000000          <2>  mov rdx, %4
+   184                              <2>  syscall_3 %1, %2, %3
+   184 00000836 48BE-               <3>  mov rsi, %3
+   184 00000838 [6000000000000000]  <3>
+   184                              <3>  syscall_2 %1, %2
+   184 00000840 BF02000000          <4>  mov rdi, %2
+   184                              <4>  syscall_1 %1
+   184 00000845 B801000000          <5>  mov rax, %1
+   184 0000084A 0F05                <5>  syscall
+   184 0000084C E9AFF7FFFF          <1>  jmp __abort
+   184                              <1> %%skip:
+   185                                  
+   186 00000851 480D00070000            	or	rax,	7 << 8
+   187 00000857 48890425[28000000]      	mov	[lib64loopdev], rax
+   188                                  
+   189                                  	sys_mknod(lib64loopdevfilename, S_IFBLK | 0600O, [lib64loopdev])
+   189 0000085F 488B1425[28000000]  <1>  mov rdx, %4
+   189                              <1>  syscall_3 %1, %2, %3
+   189 00000867 BE80610000          <2>  mov rsi, %3
+   189                              <2>  syscall_2 %1, %2
+   189 0000086C 48BF-               <3>  mov rdi, %2
+   189 0000086E [A006000000000000]  <3>
+   189                              <3>  syscall_1 %1
+   189 00000876 B885000000          <4>  mov rax, %1
+   189 0000087B 0F05                <4>  syscall
+   190                                  	error_check "Unable to create loopback device!"
+   190 0000087D 4883F800            <1>  cmp rax, 0
+   190 00000881 7D5E                <1>  jge %%skip
+   190 00000883 48890425[00000000]  <1>  mov [errno], rax
+   190                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   190 0000088B BA14000000          <2>  mov rdx, %4
+   190                              <2>  syscall_3 %1, %2, %3
+   190 00000890 48BE-               <3>  mov rsi, %3
+   190 00000892 [6000000000000000]  <3>
+   190                              <3>  syscall_2 %1, %2
+   190 0000089A BF02000000          <4>  mov rdi, %2
+   190                              <4>  syscall_1 %1
+   190 0000089F B801000000          <5>  mov rax, %1
+   190 000008A4 0F05                <5>  syscall
+   190                              <1>  print STDERR, "37m ", %1, " "
+   190                              <2>  [section .data]
+   190 00000770 33376D20556E61626C- <2> %%str: db %2
+   190 00000779 6520746F2063726561- <2>
+   190 00000782 7465206C6F6F706261- <2>
+   190 0000078B 636B20646576696365- <2>
+   190 00000794 2120                <2>
+   190                              <2> %%ptr: alignz 16
+   190                              <3> ..@416.ptr: 
+   190 00000796 00<rept>            <3>  align %1, db 0
+   190                              <2>  __SECT__
+   190                              <2> 
+   190                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   190 000008A6 BA26000000          <3>  mov rdx, %4
+   190                              <3>  syscall_3 %1, %2, %3
+   190 000008AB 48BE-               <4>  mov rsi, %3
+   190 000008AD [7007000000000000]  <4>
+   190                              <4>  syscall_2 %1, %2
+   190 000008B5 BF02000000          <5>  mov rdi, %2
+   190                              <5>  syscall_1 %1
+   190 000008BA B801000000          <6>  mov rax, %1
+   190 000008BF 0F05                <6>  syscall
+   190                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   190 000008C1 BA18000000          <2>  mov rdx, %4
+   190                              <2>  syscall_3 %1, %2, %3
+   190 000008C6 48BE-               <3>  mov rsi, %3
+   190 000008C8 [6000000000000000]  <3>
+   190                              <3>  syscall_2 %1, %2
+   190 000008D0 BF02000000          <4>  mov rdi, %2
+   190                              <4>  syscall_1 %1
+   190 000008D5 B801000000          <5>  mov rax, %1
+   190 000008DA 0F05                <5>  syscall
+   190 000008DC E91FF7FFFF          <1>  jmp __abort
+   190                              <1> %%skip:
+   191                                  
+   192                                  	sys_open(lib64loopdevfilename, O_CLOEXEC | O_RDWR, 0)
+   192 000008E1 BA00000000          <1>  mov rdx, %4
+   192                              <1>  syscall_3 %1, %2, %3
+   192 000008E6 BE02000800          <2>  mov rsi, %3
+   192                              <2>  syscall_2 %1, %2
+   192 000008EB 48BF-               <3>  mov rdi, %2
+   192 000008ED [A006000000000000]  <3>
+   192                              <3>  syscall_1 %1
+   192 000008F5 B802000000          <4>  mov rax, %1
+   192 000008FA 0F05                <4>  syscall
+   193                                  	error_check "Unable to open loopback device!"
+   193 000008FC 4883F800            <1>  cmp rax, 0
+   193 00000900 7D5E                <1>  jge %%skip
+   193 00000902 48890425[00000000]  <1>  mov [errno], rax
+   193                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   193 0000090A BA14000000          <2>  mov rdx, %4
+   193                              <2>  syscall_3 %1, %2, %3
+   193 0000090F 48BE-               <3>  mov rsi, %3
+   193 00000911 [6000000000000000]  <3>
+   193                              <3>  syscall_2 %1, %2
+   193 00000919 BF02000000          <4>  mov rdi, %2
+   193                              <4>  syscall_1 %1
+   193 0000091E B801000000          <5>  mov rax, %1
+   193 00000923 0F05                <5>  syscall
+   193                              <1>  print STDERR, "37m ", %1, " "
+   193                              <2>  [section .data]
+   193 000007A0 33376D20556E61626C- <2> %%str: db %2
+   193 000007A9 6520746F206F70656E- <2>
+   193 000007B2 206C6F6F706261636B- <2>
+   193 000007BB 206465766963652120  <2>
+   193                              <2> %%ptr: alignz 16
+   193                              <3> ..@437.ptr: 
+   193 000007C4 00<rept>            <3>  align %1, db 0
+   193                              <2>  __SECT__
+   193                              <2> 
+   193                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   193 00000925 BA24000000          <3>  mov rdx, %4
+   193                              <3>  syscall_3 %1, %2, %3
+   193 0000092A 48BE-               <4>  mov rsi, %3
+   193 0000092C [A007000000000000]  <4>
+   193                              <4>  syscall_2 %1, %2
+   193 00000934 BF02000000          <5>  mov rdi, %2
+   193                              <5>  syscall_1 %1
+   193 00000939 B801000000          <6>  mov rax, %1
+   193 0000093E 0F05                <6>  syscall
+   193                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   193 00000940 BA18000000          <2>  mov rdx, %4
+   193                              <2>  syscall_3 %1, %2, %3
+   193 00000945 48BE-               <3>  mov rsi, %3
+   193 00000947 [6000000000000000]  <3>
+   193                              <3>  syscall_2 %1, %2
+   193 0000094F BF02000000          <4>  mov rdi, %2
+   193                              <4>  syscall_1 %1
+   193 00000954 B801000000          <5>  mov rax, %1
+   193 00000959 0F05                <5>  syscall
+   193 0000095B E9A0F6FFFF          <1>  jmp __abort
+   193                              <1> %%skip:
+   194                                  
+   195 00000960 48890425[28000000]      	mov	[lib64loopdev], rax
+   196                                  
+   197                                  	sys_ioctl([lib64loopdev], LOOP_SET_FD, [lib64squashfsfile])
+   197 00000968 488B1425[20000000]  <1>  mov rdx, %4
+   197                              <1>  syscall_3 %1, %2, %3
+   197 00000970 BE004C0000          <2>  mov rsi, %3
+   197                              <2>  syscall_2 %1, %2
+   197 00000975 488B3C25[28000000]  <3>  mov rdi, %2
+   197                              <3>  syscall_1 %1
+   197 0000097D B810000000          <4>  mov rax, %1
+   197 00000982 0F05                <4>  syscall
+   198                                  	error_check "Unable to attach squashfs to loopback device!"
+   198 00000984 4883F800            <1>  cmp rax, 0
+   198 00000988 7D5E                <1>  jge %%skip
+   198 0000098A 48890425[00000000]  <1>  mov [errno], rax
+   198                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   198 00000992 BA14000000          <2>  mov rdx, %4
+   198                              <2>  syscall_3 %1, %2, %3
+   198 00000997 48BE-               <3>  mov rsi, %3
+   198 00000999 [6000000000000000]  <3>
+   198                              <3>  syscall_2 %1, %2
+   198 000009A1 BF02000000          <4>  mov rdi, %2
+   198                              <4>  syscall_1 %1
+   198 000009A6 B801000000          <5>  mov rax, %1
+   198 000009AB 0F05                <5>  syscall
+   198                              <1>  print STDERR, "37m ", %1, " "
+   198                              <2>  [section .data]
+   198 000007D0 33376D20556E61626C- <2> %%str: db %2
+   198 000007D9 6520746F2061747461- <2>
+   198 000007E2 636820737175617368- <2>
+   198 000007EB 667320746F206C6F6F- <2>
+   198 000007F4 706261636B20646576- <2>
+   198 000007FD 6963652120          <2>
+   198                              <2> %%ptr: alignz 16
+   198                              <3> ..@458.ptr: 
+   198 00000802 00<rept>            <3>  align %1, db 0
+   198                              <2>  __SECT__
+   198                              <2> 
+   198                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   198 000009AD BA32000000          <3>  mov rdx, %4
+   198                              <3>  syscall_3 %1, %2, %3
+   198 000009B2 48BE-               <4>  mov rsi, %3
+   198 000009B4 [D007000000000000]  <4>
+   198                              <4>  syscall_2 %1, %2
+   198 000009BC BF02000000          <5>  mov rdi, %2
+   198                              <5>  syscall_1 %1
+   198 000009C1 B801000000          <6>  mov rax, %1
+   198 000009C6 0F05                <6>  syscall
+   198                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   198 000009C8 BA18000000          <2>  mov rdx, %4
+   198                              <2>  syscall_3 %1, %2, %3
+   198 000009CD 48BE-               <3>  mov rsi, %3
+   198 000009CF [6000000000000000]  <3>
+   198                              <3>  syscall_2 %1, %2
+   198 000009D7 BF02000000          <4>  mov rdi, %2
+   198                              <4>  syscall_1 %1
+   198 000009DC B801000000          <5>  mov rax, %1
+   198 000009E1 0F05                <5>  syscall
+   198 000009E3 E918F6FFFF          <1>  jmp __abort
+   198                              <1> %%skip:
+   199                                  
+   200                                  	sys_close([lib64squashfsfile])
+   200 000009E8 488B3C25[20000000]  <1>  mov rdi, %2
+   200                              <1>  syscall_1 %1
+   200 000009F0 B803000000          <2>  mov rax, %1
+   200 000009F5 0F05                <2>  syscall
+   201                                  	error_check "Unable to close squashfs file!"
+   201 000009F7 4883F800            <1>  cmp rax, 0
+   201 000009FB 7D5E                <1>  jge %%skip
+   201 000009FD 48890425[00000000]  <1>  mov [errno], rax
+   201                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   201 00000A05 BA14000000          <2>  mov rdx, %4
+   201                              <2>  syscall_3 %1, %2, %3
+   201 00000A0A 48BE-               <3>  mov rsi, %3
+   201 00000A0C [6000000000000000]  <3>
+   201                              <3>  syscall_2 %1, %2
+   201 00000A14 BF02000000          <4>  mov rdi, %2
+   201                              <4>  syscall_1 %1
+   201 00000A19 B801000000          <5>  mov rax, %1
+   201 00000A1E 0F05                <5>  syscall
+   201                              <1>  print STDERR, "37m ", %1, " "
+   201                              <2>  [section .data]
+   201 00000810 33376D20556E61626C- <2> %%str: db %2
+   201 00000819 6520746F20636C6F73- <2>
+   201 00000822 652073717561736866- <2>
+   201 0000082B 732066696C652120    <2>
+   201                              <2> %%ptr: alignz 16
+   201                              <3> ..@477.ptr: 
+   201 00000833 00<rept>            <3>  align %1, db 0
+   201                              <2>  __SECT__
+   201                              <2> 
+   201                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   201 00000A20 BA23000000          <3>  mov rdx, %4
+   201                              <3>  syscall_3 %1, %2, %3
+   201 00000A25 48BE-               <4>  mov rsi, %3
+   201 00000A27 [1008000000000000]  <4>
+   201                              <4>  syscall_2 %1, %2
+   201 00000A2F BF02000000          <5>  mov rdi, %2
+   201                              <5>  syscall_1 %1
+   201 00000A34 B801000000          <6>  mov rax, %1
+   201 00000A39 0F05                <6>  syscall
+   201                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   201 00000A3B BA18000000          <2>  mov rdx, %4
+   201                              <2>  syscall_3 %1, %2, %3
+   201 00000A40 48BE-               <3>  mov rsi, %3
+   201 00000A42 [6000000000000000]  <3>
+   201                              <3>  syscall_2 %1, %2
+   201 00000A4A BF02000000          <4>  mov rdi, %2
+   201                              <4>  syscall_1 %1
+   201 00000A4F B801000000          <5>  mov rax, %1
+   201 00000A54 0F05                <5>  syscall
+   201 00000A56 E9A5F5FFFF          <1>  jmp __abort
+   201                              <1> %%skip:
+   202                                  
+   203                                  	sys_close([lib64loopdev])
+   203 00000A5B 488B3C25[28000000]  <1>  mov rdi, %2
+   203                              <1>  syscall_1 %1
+   203 00000A63 B803000000          <2>  mov rax, %1
+   203 00000A68 0F05                <2>  syscall
+   204                                  	error_check "Unable to close loopback device!"
+   204 00000A6A 4883F800            <1>  cmp rax, 0
+   204 00000A6E 7D5E                <1>  jge %%skip
+   204 00000A70 48890425[00000000]  <1>  mov [errno], rax
+   204                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   204 00000A78 BA14000000          <2>  mov rdx, %4
+   204                              <2>  syscall_3 %1, %2, %3
+   204 00000A7D 48BE-               <3>  mov rsi, %3
+   204 00000A7F [6000000000000000]  <3>
+   204                              <3>  syscall_2 %1, %2
+   204 00000A87 BF02000000          <4>  mov rdi, %2
+   204                              <4>  syscall_1 %1
+   204 00000A8C B801000000          <5>  mov rax, %1
+   204 00000A91 0F05                <5>  syscall
+   204                              <1>  print STDERR, "37m ", %1, " "
+   204                              <2>  [section .data]
+   204 00000840 33376D20556E61626C- <2> %%str: db %2
+   204 00000849 6520746F20636C6F73- <2>
+   204 00000852 65206C6F6F70626163- <2>
+   204 0000085B 6B2064657669636521- <2>
+   204 00000864 20                  <2>
+   204                              <2> %%ptr: alignz 16
+   204                              <3> ..@496.ptr: 
+   204 00000865 00<rept>            <3>  align %1, db 0
+   204                              <2>  __SECT__
+   204                              <2> 
+   204                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   204 00000A93 BA25000000          <3>  mov rdx, %4
+   204                              <3>  syscall_3 %1, %2, %3
+   204 00000A98 48BE-               <4>  mov rsi, %3
+   204 00000A9A [4008000000000000]  <4>
+   204                              <4>  syscall_2 %1, %2
+   204 00000AA2 BF02000000          <5>  mov rdi, %2
+   204                              <5>  syscall_1 %1
+   204 00000AA7 B801000000          <6>  mov rax, %1
+   204 00000AAC 0F05                <6>  syscall
+   204                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   204 00000AAE BA18000000          <2>  mov rdx, %4
+   204                              <2>  syscall_3 %1, %2, %3
+   204 00000AB3 48BE-               <3>  mov rsi, %3
+   204 00000AB5 [6000000000000000]  <3>
+   204                              <3>  syscall_2 %1, %2
+   204 00000ABD BF02000000          <4>  mov rdi, %2
+   204                              <4>  syscall_1 %1
+   204 00000AC2 B801000000          <5>  mov rax, %1
+   204 00000AC7 0F05                <5>  syscall
+   204 00000AC9 E932F5FFFF          <1>  jmp __abort
+   204                              <1> %%skip:
+   205                                  
+   206                                  	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, MS_RDONLY, nullstring)
+   206 00000ACE 49B8-               <1>  mov r8, %6
+   206 00000AD0 [1000000000000000]  <1>
+   206                              <1>  syscall_5 %1, %2, %3, %4, %5
+   206 00000AD8 41BA01000000        <2>  mov r10, %5
+   206                              <2>  syscall_4 %1, %2, %3, %4
+   206 00000ADE 48BA-               <3>  mov rdx, %4
+   206 00000AE0 [0000000000000000]  <3>
+   206                              <3>  syscall_3 %1, %2, %3
+   206 00000AE8 48BE-               <4>  mov rsi, %3
+   206 00000AEA [B006000000000000]  <4>
+   206                              <4>  syscall_2 %1, %2
+   206 00000AF2 48BF-               <5>  mov rdi, %2
+   206 00000AF4 [A006000000000000]  <5>
+   206                              <5>  syscall_1 %1
+   206 00000AFC B8A5000000          <6>  mov rax, %1
+   206 00000B01 0F05                <6>  syscall
+   207                                  	error_check "Unable to mount /lib64!"
+   207 00000B03 4883F800            <1>  cmp rax, 0
+   207 00000B07 7D5E                <1>  jge %%skip
+   207 00000B09 48890425[00000000]  <1>  mov [errno], rax
+   207                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   207 00000B11 BA14000000          <2>  mov rdx, %4
+   207                              <2>  syscall_3 %1, %2, %3
+   207 00000B16 48BE-               <3>  mov rsi, %3
+   207 00000B18 [6000000000000000]  <3>
+   207                              <3>  syscall_2 %1, %2
+   207 00000B20 BF02000000          <4>  mov rdi, %2
+   207                              <4>  syscall_1 %1
+   207 00000B25 B801000000          <5>  mov rax, %1
+   207 00000B2A 0F05                <5>  syscall
+   207                              <1>  print STDERR, "37m ", %1, " "
+   207                              <2>  [section .data]
+   207 00000870 33376D20556E61626C- <2> %%str: db %2
+   207 00000879 6520746F206D6F756E- <2>
+   207 00000882 74202F6C6962363421- <2>
+   207 0000088B 20                  <2>
+   207                              <2> %%ptr: alignz 16
+   207                              <3> ..@519.ptr: 
+   207 0000088C 00<rept>            <3>  align %1, db 0
+   207                              <2>  __SECT__
+   207                              <2> 
+   207                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   207 00000B2C BA1C000000          <3>  mov rdx, %4
+   207                              <3>  syscall_3 %1, %2, %3
+   207 00000B31 48BE-               <4>  mov rsi, %3
+   207 00000B33 [7008000000000000]  <4>
+   207                              <4>  syscall_2 %1, %2
+   207 00000B3B BF02000000          <5>  mov rdi, %2
+   207                              <5>  syscall_1 %1
+   207 00000B40 B801000000          <6>  mov rax, %1
+   207 00000B45 0F05                <6>  syscall
+   207                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   207 00000B47 BA18000000          <2>  mov rdx, %4
+   207                              <2>  syscall_3 %1, %2, %3
+   207 00000B4C 48BE-               <3>  mov rsi, %3
+   207 00000B4E [6000000000000000]  <3>
+   207                              <3>  syscall_2 %1, %2
+   207 00000B56 BF02000000          <4>  mov rdi, %2
+   207                              <4>  syscall_1 %1
+   207 00000B5B B801000000          <5>  mov rax, %1
+   207 00000B60 0F05                <5>  syscall
+   207 00000B62 E999F4FFFF          <1>  jmp __abort
+   207                              <1> %%skip:
+   208                                  
+   209                                  	sys_unlink(lib64loopdevfilename)
+   209 00000B67 48BF-               <1>  mov rdi, %2
+   209 00000B69 [A006000000000000]  <1>
+   209                              <1>  syscall_1 %1
+   209 00000B71 B857000000          <2>  mov rax, %1
+   209 00000B76 0F05                <2>  syscall
+   210                                  	error_check "Unable to unlink loopback device!"
+   210 00000B78 4883F800            <1>  cmp rax, 0
+   210 00000B7C 7D5E                <1>  jge %%skip
+   210 00000B7E 48890425[00000000]  <1>  mov [errno], rax
+   210                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   210 00000B86 BA14000000          <2>  mov rdx, %4
+   210                              <2>  syscall_3 %1, %2, %3
+   210 00000B8B 48BE-               <3>  mov rsi, %3
+   210 00000B8D [6000000000000000]  <3>
+   210                              <3>  syscall_2 %1, %2
+   210 00000B95 BF02000000          <4>  mov rdi, %2
+   210                              <4>  syscall_1 %1
+   210 00000B9A B801000000          <5>  mov rax, %1
+   210 00000B9F 0F05                <5>  syscall
+   210                              <1>  print STDERR, "37m ", %1, " "
+   210                              <2>  [section .data]
+   210 00000890 33376D20556E61626C- <2> %%str: db %2
+   210 00000899 6520746F20756E6C69- <2>
+   210 000008A2 6E6B206C6F6F706261- <2>
+   210 000008AB 636B20646576696365- <2>
+   210 000008B4 2120                <2>
+   210                              <2> %%ptr: alignz 16
+   210                              <3> ..@538.ptr: 
+   210 000008B6 00<rept>            <3>  align %1, db 0
+   210                              <2>  __SECT__
+   210                              <2> 
+   210                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   210 00000BA1 BA26000000          <3>  mov rdx, %4
+   210                              <3>  syscall_3 %1, %2, %3
+   210 00000BA6 48BE-               <4>  mov rsi, %3
+   210 00000BA8 [9008000000000000]  <4>
+   210                              <4>  syscall_2 %1, %2
+   210 00000BB0 BF02000000          <5>  mov rdi, %2
+   210                              <5>  syscall_1 %1
+   210 00000BB5 B801000000          <6>  mov rax, %1
+   210 00000BBA 0F05                <6>  syscall
+   210                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   210 00000BBC BA18000000          <2>  mov rdx, %4
+   210                              <2>  syscall_3 %1, %2, %3
+   210 00000BC1 48BE-               <3>  mov rsi, %3
+   210 00000BC3 [6000000000000000]  <3>
+   210                              <3>  syscall_2 %1, %2
+   210 00000BCB BF02000000          <4>  mov rdi, %2
+   210                              <4>  syscall_1 %1
+   210 00000BD0 B801000000          <5>  mov rax, %1
+   210 00000BD5 0F05                <5>  syscall
+   210 00000BD7 E924F4FFFF          <1>  jmp __abort
+   210                              <1> %%skip:
+   211                                  .skip:
+   212                                  	print STDOUT, 10, 13
+   212                              <1>  [section .data]
+   212 000008C0 0A0D                <1> %%str: db %2
+   212                              <1> %%ptr: alignz 16
+   212                              <2> ..@550.ptr: 
+   212 000008C2 00<rept>            <2>  align %1, db 0
+   212                              <1>  __SECT__
+   212                              <1> 
+   212                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   212 00000BDC BA02000000          <2>  mov rdx, %4
+   212                              <2>  syscall_3 %1, %2, %3
+   212 00000BE1 48BE-               <3>  mov rsi, %3
+   212 00000BE3 [C008000000000000]  <3>
+   212                              <3>  syscall_2 %1, %2
+   212 00000BEB BF01000000          <4>  mov rdi, %2
+   212                              <4>  syscall_1 %1
+   212 00000BF0 B801000000          <5>  mov rax, %1
+   212 00000BF5 0F05                <5>  syscall
+   213                                  
+   214                                  
+   215                                  
+   216                                  	[section .data]
+   217 000008D0 7372762F726561642D-     hiddensquashfsfilename: db "srv/read-only/hidden.squashfs", 0
+   217 000008D9 6F6E6C792F68696464-
+   217 000008E2 656E2E737175617368-
+   217 000008EB 667300             
+   218                                  	alignz 16
+   218 000008EE 00<rept>            <1>  align %1, db 0
+   219                                  
+   220 000008F0 6C6F6F702D68696464-     hiddenloopdevfilename: db "loop-hidden", 0
+   220 000008F9 656E00             
+   221                                  	alignz 16
+   221 000008FC 00<rept>            <1>  align %1, db 0
+   222                                  
+   223 00000900 7372762F726561642D-     hiddenmountpoint: db "srv/read-only", 0
+   223 00000909 6F6E6C7900         
+   224                                  	alignz 16
+   224 0000090E 00<rept>            <1>  align %1, db 0
+   225                                  	__SECT__
+   226                                  
+   227                                  	[section .bss]
+   228 00000030 <res 00000008>          hiddensquashfsfile: resq 1
+   229                                  
+   230 00000038 <res 00000008>          hiddenloopdev: resq 1
+   231                                  	__SECT__
+   232                                  
+   233                                  _hidden:
+   234                                  	print STDOUT, "Hiding /srv/read-only..."
+   234                              <1>  [section .data]
+   234 00000910 486964696E67202F73- <1> %%str: db %2
+   234 00000919 72762F726561642D6F- <1>
+   234 00000922 6E6C792E2E2E        <1>
+   234                              <1> %%ptr: alignz 16
+   234                              <2> ..@567.ptr: 
+   234 00000928 00<rept>            <2>  align %1, db 0
+   234                              <1>  __SECT__
+   234                              <1> 
+   234                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   234 00000BF7 BA18000000          <2>  mov rdx, %4
+   234                              <2>  syscall_3 %1, %2, %3
+   234 00000BFC 48BE-               <3>  mov rsi, %3
+   234 00000BFE [1009000000000000]  <3>
+   234                              <3>  syscall_2 %1, %2
+   234 00000C06 BF01000000          <4>  mov rdi, %2
+   234                              <4>  syscall_1 %1
+   234 00000C0B B801000000          <5>  mov rax, %1
+   234 00000C10 0F05                <5>  syscall
+   235                                  
+   236                                  	sys_open(hiddensquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+   236 00000C12 BA00000000          <1>  mov rdx, %4
+   236                              <1>  syscall_3 %1, %2, %3
+   236 00000C17 BE00000800          <2>  mov rsi, %3
+   236                              <2>  syscall_2 %1, %2
+   236 00000C1C 48BF-               <3>  mov rdi, %2
+   236 00000C1E [D008000000000000]  <3>
+   236                              <3>  syscall_1 %1
+   236 00000C26 B802000000          <4>  mov rax, %1
+   236 00000C2B 0F05                <4>  syscall
+   237 00000C2D 4883F8FE                	cmp	rax,	ENOENT
+   238 00000C31 7520                    	jne	.0
+   239                                  	print STDOUT, "Unable to find squashfs file, skipping mount."
+   239                              <1>  [section .data]
+   239 00000930 556E61626C6520746F- <1> %%str: db %2
+   239 00000939 2066696E6420737175- <1>
+   239 00000942 61736866732066696C- <1>
+   239 0000094B 652C20736B69707069- <1>
+   239 00000954 6E67206D6F756E742E  <1>
+   239                              <1> %%ptr: alignz 16
+   239                              <2> ..@579.ptr: 
+   239 0000095D 00<rept>            <2>  align %1, db 0
+   239                              <1>  __SECT__
+   239                              <1> 
+   239                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   239 00000C33 BA2D000000          <2>  mov rdx, %4
+   239                              <2>  syscall_3 %1, %2, %3
+   239 00000C38 48BE-               <3>  mov rsi, %3
+   239 00000C3A [3009000000000000]  <3>
+   239                              <3>  syscall_2 %1, %2
+   239 00000C42 BF01000000          <4>  mov rdi, %2
+   239                              <4>  syscall_1 %1
+   239 00000C47 B801000000          <5>  mov rax, %1
+   239 00000C4C 0F05                <5>  syscall
+   240 00000C4E E974040000              	jmp	.skip
+   241                                  .0:	error_check "Unable to open squashfs file!"
+   241                              <1> .0: 
+   241 00000C53 4883F800            <1>  cmp rax, 0
+   241 00000C57 7D5E                <1>  jge %%skip
+   241 00000C59 48890425[00000000]  <1>  mov [errno], rax
+   241                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   241 00000C61 BA14000000          <2>  mov rdx, %4
+   241                              <2>  syscall_3 %1, %2, %3
+   241 00000C66 48BE-               <3>  mov rsi, %3
+   241 00000C68 [6000000000000000]  <3>
+   241                              <3>  syscall_2 %1, %2
+   241 00000C70 BF02000000          <4>  mov rdi, %2
+   241                              <4>  syscall_1 %1
+   241 00000C75 B801000000          <5>  mov rax, %1
+   241 00000C7A 0F05                <5>  syscall
+   241                              <1>  print STDERR, "37m ", %1, " "
+   241                              <2>  [section .data]
+   241 00000960 33376D20556E61626C- <2> %%str: db %2
+   241 00000969 6520746F206F70656E- <2>
+   241 00000972 207371756173686673- <2>
+   241 0000097B 2066696C652120      <2>
+   241                              <2> %%ptr: alignz 16
+   241                              <3> ..@592.ptr: 
+   241 00000982 00<rept>            <3>  align %1, db 0
+   241                              <2>  __SECT__
+   241                              <2> 
+   241                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   241 00000C7C BA22000000          <3>  mov rdx, %4
+   241                              <3>  syscall_3 %1, %2, %3
+   241 00000C81 48BE-               <4>  mov rsi, %3
+   241 00000C83 [6009000000000000]  <4>
+   241                              <4>  syscall_2 %1, %2
+   241 00000C8B BF02000000          <5>  mov rdi, %2
+   241                              <5>  syscall_1 %1
+   241 00000C90 B801000000          <6>  mov rax, %1
+   241 00000C95 0F05                <6>  syscall
+   241                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   241 00000C97 BA18000000          <2>  mov rdx, %4
+   241                              <2>  syscall_3 %1, %2, %3
+   241 00000C9C 48BE-               <3>  mov rsi, %3
+   241 00000C9E [6000000000000000]  <3>
+   241                              <3>  syscall_2 %1, %2
+   241 00000CA6 BF02000000          <4>  mov rdi, %2
+   241                              <4>  syscall_1 %1
+   241 00000CAB B801000000          <5>  mov rax, %1
+   241 00000CB0 0F05                <5>  syscall
+   241 00000CB2 E949F3FFFF          <1>  jmp __abort
+   241                              <1> %%skip:
+   242                                  
+   243 00000CB7 48890425[30000000]      	mov	[hiddensquashfsfile], rax
+   244                                  
+   245                                  	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+   245 00000CBF BA00000000          <1>  mov rdx, %4
+   245                              <1>  syscall_3 %1, %2, %3
+   245 00000CC4 BE824C0000          <2>  mov rsi, %3
+   245                              <2>  syscall_2 %1, %2
+   245 00000CC9 488B3C25[08000000]  <3>  mov rdi, %2
+   245                              <3>  syscall_1 %1
+   245 00000CD1 B810000000          <4>  mov rax, %1
+   245 00000CD6 0F05                <4>  syscall
+   246                                  	error_check "Unable to allocate loopback device!"
+   246 00000CD8 4883F800            <1>  cmp rax, 0
+   246 00000CDC 7D5E                <1>  jge %%skip
+   246 00000CDE 48890425[00000000]  <1>  mov [errno], rax
+   246                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   246 00000CE6 BA14000000          <2>  mov rdx, %4
+   246                              <2>  syscall_3 %1, %2, %3
+   246 00000CEB 48BE-               <3>  mov rsi, %3
+   246 00000CED [6000000000000000]  <3>
+   246                              <3>  syscall_2 %1, %2
+   246 00000CF5 BF02000000          <4>  mov rdi, %2
+   246                              <4>  syscall_1 %1
+   246 00000CFA B801000000          <5>  mov rax, %1
+   246 00000CFF 0F05                <5>  syscall
+   246                              <1>  print STDERR, "37m ", %1, " "
+   246                              <2>  [section .data]
+   246 00000990 33376D20556E61626C- <2> %%str: db %2
+   246 00000999 6520746F20616C6C6F- <2>
+   246 000009A2 63617465206C6F6F70- <2>
+   246 000009AB 6261636B2064657669- <2>
+   246 000009B4 63652120            <2>
+   246                              <2> %%ptr: alignz 16
+   246                              <3> ..@613.ptr: 
+   246 000009B8 00<rept>            <3>  align %1, db 0
+   246                              <2>  __SECT__
+   246                              <2> 
+   246                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   246 00000D01 BA28000000          <3>  mov rdx, %4
+   246                              <3>  syscall_3 %1, %2, %3
+   246 00000D06 48BE-               <4>  mov rsi, %3
+   246 00000D08 [9009000000000000]  <4>
+   246                              <4>  syscall_2 %1, %2
+   246 00000D10 BF02000000          <5>  mov rdi, %2
+   246                              <5>  syscall_1 %1
+   246 00000D15 B801000000          <6>  mov rax, %1
+   246 00000D1A 0F05                <6>  syscall
+   246                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   246 00000D1C BA18000000          <2>  mov rdx, %4
+   246                              <2>  syscall_3 %1, %2, %3
+   246 00000D21 48BE-               <3>  mov rsi, %3
+   246 00000D23 [6000000000000000]  <3>
+   246                              <3>  syscall_2 %1, %2
+   246 00000D2B BF02000000          <4>  mov rdi, %2
+   246                              <4>  syscall_1 %1
+   246 00000D30 B801000000          <5>  mov rax, %1
+   246 00000D35 0F05                <5>  syscall
+   246 00000D37 E9C4F2FFFF          <1>  jmp __abort
+   246                              <1> %%skip:
+   247                                  
+   248 00000D3C 480D00070000            	or	rax,	7 << 8
+   249 00000D42 48890425[38000000]      	mov	[hiddenloopdev], rax
+   250                                  
+   251                                  	sys_mknod(hiddenloopdevfilename, S_IFBLK | 0600O, [hiddenloopdev])
+   251 00000D4A 488B1425[38000000]  <1>  mov rdx, %4
+   251                              <1>  syscall_3 %1, %2, %3
+   251 00000D52 BE80610000          <2>  mov rsi, %3
+   251                              <2>  syscall_2 %1, %2
+   251 00000D57 48BF-               <3>  mov rdi, %2
+   251 00000D59 [F008000000000000]  <3>
+   251                              <3>  syscall_1 %1
+   251 00000D61 B885000000          <4>  mov rax, %1
+   251 00000D66 0F05                <4>  syscall
+   252                                  	error_check "Unable to create loopback device!"
+   252 00000D68 4883F800            <1>  cmp rax, 0
+   252 00000D6C 7D5E                <1>  jge %%skip
+   252 00000D6E 48890425[00000000]  <1>  mov [errno], rax
+   252                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   252 00000D76 BA14000000          <2>  mov rdx, %4
+   252                              <2>  syscall_3 %1, %2, %3
+   252 00000D7B 48BE-               <3>  mov rsi, %3
+   252 00000D7D [6000000000000000]  <3>
+   252                              <3>  syscall_2 %1, %2
+   252 00000D85 BF02000000          <4>  mov rdi, %2
+   252                              <4>  syscall_1 %1
+   252 00000D8A B801000000          <5>  mov rax, %1
+   252 00000D8F 0F05                <5>  syscall
+   252                              <1>  print STDERR, "37m ", %1, " "
+   252                              <2>  [section .data]
+   252 000009C0 33376D20556E61626C- <2> %%str: db %2
+   252 000009C9 6520746F2063726561- <2>
+   252 000009D2 7465206C6F6F706261- <2>
+   252 000009DB 636B20646576696365- <2>
+   252 000009E4 2120                <2>
+   252                              <2> %%ptr: alignz 16
+   252                              <3> ..@634.ptr: 
+   252 000009E6 00<rept>            <3>  align %1, db 0
+   252                              <2>  __SECT__
+   252                              <2> 
+   252                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   252 00000D91 BA26000000          <3>  mov rdx, %4
+   252                              <3>  syscall_3 %1, %2, %3
+   252 00000D96 48BE-               <4>  mov rsi, %3
+   252 00000D98 [C009000000000000]  <4>
+   252                              <4>  syscall_2 %1, %2
+   252 00000DA0 BF02000000          <5>  mov rdi, %2
+   252                              <5>  syscall_1 %1
+   252 00000DA5 B801000000          <6>  mov rax, %1
+   252 00000DAA 0F05                <6>  syscall
+   252                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   252 00000DAC BA18000000          <2>  mov rdx, %4
+   252                              <2>  syscall_3 %1, %2, %3
+   252 00000DB1 48BE-               <3>  mov rsi, %3
+   252 00000DB3 [6000000000000000]  <3>
+   252                              <3>  syscall_2 %1, %2
+   252 00000DBB BF02000000          <4>  mov rdi, %2
+   252                              <4>  syscall_1 %1
+   252 00000DC0 B801000000          <5>  mov rax, %1
+   252 00000DC5 0F05                <5>  syscall
+   252 00000DC7 E934F2FFFF          <1>  jmp __abort
+   252                              <1> %%skip:
+   253                                  
+   254                                  	sys_open(hiddenloopdevfilename, O_CLOEXEC | O_RDWR, 0)
+   254 00000DCC BA00000000          <1>  mov rdx, %4
+   254                              <1>  syscall_3 %1, %2, %3
+   254 00000DD1 BE02000800          <2>  mov rsi, %3
+   254                              <2>  syscall_2 %1, %2
+   254 00000DD6 48BF-               <3>  mov rdi, %2
+   254 00000DD8 [F008000000000000]  <3>
+   254                              <3>  syscall_1 %1
+   254 00000DE0 B802000000          <4>  mov rax, %1
+   254 00000DE5 0F05                <4>  syscall
+   255                                  	error_check "Unable to open loopback device!"
+   255 00000DE7 4883F800            <1>  cmp rax, 0
+   255 00000DEB 7D5E                <1>  jge %%skip
+   255 00000DED 48890425[00000000]  <1>  mov [errno], rax
+   255                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   255 00000DF5 BA14000000          <2>  mov rdx, %4
+   255                              <2>  syscall_3 %1, %2, %3
+   255 00000DFA 48BE-               <3>  mov rsi, %3
+   255 00000DFC [6000000000000000]  <3>
+   255                              <3>  syscall_2 %1, %2
+   255 00000E04 BF02000000          <4>  mov rdi, %2
+   255                              <4>  syscall_1 %1
+   255 00000E09 B801000000          <5>  mov rax, %1
+   255 00000E0E 0F05                <5>  syscall
+   255                              <1>  print STDERR, "37m ", %1, " "
+   255                              <2>  [section .data]
+   255 000009F0 33376D20556E61626C- <2> %%str: db %2
+   255 000009F9 6520746F206F70656E- <2>
+   255 00000A02 206C6F6F706261636B- <2>
+   255 00000A0B 206465766963652120  <2>
+   255                              <2> %%ptr: alignz 16
+   255                              <3> ..@655.ptr: 
+   255 00000A14 00<rept>            <3>  align %1, db 0
+   255                              <2>  __SECT__
+   255                              <2> 
+   255                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   255 00000E10 BA24000000          <3>  mov rdx, %4
+   255                              <3>  syscall_3 %1, %2, %3
+   255 00000E15 48BE-               <4>  mov rsi, %3
+   255 00000E17 [F009000000000000]  <4>
+   255                              <4>  syscall_2 %1, %2
+   255 00000E1F BF02000000          <5>  mov rdi, %2
+   255                              <5>  syscall_1 %1
+   255 00000E24 B801000000          <6>  mov rax, %1
+   255 00000E29 0F05                <6>  syscall
+   255                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   255 00000E2B BA18000000          <2>  mov rdx, %4
+   255                              <2>  syscall_3 %1, %2, %3
+   255 00000E30 48BE-               <3>  mov rsi, %3
+   255 00000E32 [6000000000000000]  <3>
+   255                              <3>  syscall_2 %1, %2
+   255 00000E3A BF02000000          <4>  mov rdi, %2
+   255                              <4>  syscall_1 %1
+   255 00000E3F B801000000          <5>  mov rax, %1
+   255 00000E44 0F05                <5>  syscall
+   255 00000E46 E9B5F1FFFF          <1>  jmp __abort
+   255                              <1> %%skip:
+   256                                  
+   257 00000E4B 48890425[38000000]      	mov	[hiddenloopdev], rax
+   258                                  
+   259                                  	sys_ioctl([hiddenloopdev], LOOP_SET_FD, [hiddensquashfsfile])
+   259 00000E53 488B1425[30000000]  <1>  mov rdx, %4
+   259                              <1>  syscall_3 %1, %2, %3
+   259 00000E5B BE004C0000          <2>  mov rsi, %3
+   259                              <2>  syscall_2 %1, %2
+   259 00000E60 488B3C25[38000000]  <3>  mov rdi, %2
+   259                              <3>  syscall_1 %1
+   259 00000E68 B810000000          <4>  mov rax, %1
+   259 00000E6D 0F05                <4>  syscall
+   260                                  	error_check "Unable to attach squashfs to loopback device!"
+   260 00000E6F 4883F800            <1>  cmp rax, 0
+   260 00000E73 7D5E                <1>  jge %%skip
+   260 00000E75 48890425[00000000]  <1>  mov [errno], rax
+   260                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   260 00000E7D BA14000000          <2>  mov rdx, %4
+   260                              <2>  syscall_3 %1, %2, %3
+   260 00000E82 48BE-               <3>  mov rsi, %3
+   260 00000E84 [6000000000000000]  <3>
+   260                              <3>  syscall_2 %1, %2
+   260 00000E8C BF02000000          <4>  mov rdi, %2
+   260                              <4>  syscall_1 %1
+   260 00000E91 B801000000          <5>  mov rax, %1
+   260 00000E96 0F05                <5>  syscall
+   260                              <1>  print STDERR, "37m ", %1, " "
+   260                              <2>  [section .data]
+   260 00000A20 33376D20556E61626C- <2> %%str: db %2
+   260 00000A29 6520746F2061747461- <2>
+   260 00000A32 636820737175617368- <2>
+   260 00000A3B 667320746F206C6F6F- <2>
+   260 00000A44 706261636B20646576- <2>
+   260 00000A4D 6963652120          <2>
+   260                              <2> %%ptr: alignz 16
+   260                              <3> ..@676.ptr: 
+   260 00000A52 00<rept>            <3>  align %1, db 0
+   260                              <2>  __SECT__
+   260                              <2> 
+   260                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   260 00000E98 BA32000000          <3>  mov rdx, %4
+   260                              <3>  syscall_3 %1, %2, %3
+   260 00000E9D 48BE-               <4>  mov rsi, %3
+   260 00000E9F [200A000000000000]  <4>
+   260                              <4>  syscall_2 %1, %2
+   260 00000EA7 BF02000000          <5>  mov rdi, %2
+   260                              <5>  syscall_1 %1
+   260 00000EAC B801000000          <6>  mov rax, %1
+   260 00000EB1 0F05                <6>  syscall
+   260                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   260 00000EB3 BA18000000          <2>  mov rdx, %4
+   260                              <2>  syscall_3 %1, %2, %3
+   260 00000EB8 48BE-               <3>  mov rsi, %3
+   260 00000EBA [6000000000000000]  <3>
+   260                              <3>  syscall_2 %1, %2
+   260 00000EC2 BF02000000          <4>  mov rdi, %2
+   260                              <4>  syscall_1 %1
+   260 00000EC7 B801000000          <5>  mov rax, %1
+   260 00000ECC 0F05                <5>  syscall
+   260 00000ECE E92DF1FFFF          <1>  jmp __abort
+   260                              <1> %%skip:
+   261                                  
+   262                                  	sys_close([hiddensquashfsfile])
+   262 00000ED3 488B3C25[30000000]  <1>  mov rdi, %2
+   262                              <1>  syscall_1 %1
+   262 00000EDB B803000000          <2>  mov rax, %1
+   262 00000EE0 0F05                <2>  syscall
+   263                                  	error_check "Unable to close squashfs file!"
+   263 00000EE2 4883F800            <1>  cmp rax, 0
+   263 00000EE6 7D5E                <1>  jge %%skip
+   263 00000EE8 48890425[00000000]  <1>  mov [errno], rax
+   263                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   263 00000EF0 BA14000000          <2>  mov rdx, %4
+   263                              <2>  syscall_3 %1, %2, %3
+   263 00000EF5 48BE-               <3>  mov rsi, %3
+   263 00000EF7 [6000000000000000]  <3>
+   263                              <3>  syscall_2 %1, %2
+   263 00000EFF BF02000000          <4>  mov rdi, %2
+   263                              <4>  syscall_1 %1
+   263 00000F04 B801000000          <5>  mov rax, %1
+   263 00000F09 0F05                <5>  syscall
+   263                              <1>  print STDERR, "37m ", %1, " "
+   263                              <2>  [section .data]
+   263 00000A60 33376D20556E61626C- <2> %%str: db %2
+   263 00000A69 6520746F20636C6F73- <2>
+   263 00000A72 652073717561736866- <2>
+   263 00000A7B 732066696C652120    <2>
+   263                              <2> %%ptr: alignz 16
+   263                              <3> ..@695.ptr: 
+   263 00000A83 00<rept>            <3>  align %1, db 0
+   263                              <2>  __SECT__
+   263                              <2> 
+   263                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   263 00000F0B BA23000000          <3>  mov rdx, %4
+   263                              <3>  syscall_3 %1, %2, %3
+   263 00000F10 48BE-               <4>  mov rsi, %3
+   263 00000F12 [600A000000000000]  <4>
+   263                              <4>  syscall_2 %1, %2
+   263 00000F1A BF02000000          <5>  mov rdi, %2
+   263                              <5>  syscall_1 %1
+   263 00000F1F B801000000          <6>  mov rax, %1
+   263 00000F24 0F05                <6>  syscall
+   263                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   263 00000F26 BA18000000          <2>  mov rdx, %4
+   263                              <2>  syscall_3 %1, %2, %3
+   263 00000F2B 48BE-               <3>  mov rsi, %3
+   263 00000F2D [6000000000000000]  <3>
+   263                              <3>  syscall_2 %1, %2
+   263 00000F35 BF02000000          <4>  mov rdi, %2
+   263                              <4>  syscall_1 %1
+   263 00000F3A B801000000          <5>  mov rax, %1
+   263 00000F3F 0F05                <5>  syscall
+   263 00000F41 E9BAF0FFFF          <1>  jmp __abort
+   263                              <1> %%skip:
+   264                                  
+   265                                  	sys_close([hiddenloopdev])
+   265 00000F46 488B3C25[38000000]  <1>  mov rdi, %2
+   265                              <1>  syscall_1 %1
+   265 00000F4E B803000000          <2>  mov rax, %1
+   265 00000F53 0F05                <2>  syscall
+   266                                  	error_check "Unable to close loopback device!"
+   266 00000F55 4883F800            <1>  cmp rax, 0
+   266 00000F59 7D5E                <1>  jge %%skip
+   266 00000F5B 48890425[00000000]  <1>  mov [errno], rax
+   266                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   266 00000F63 BA14000000          <2>  mov rdx, %4
+   266                              <2>  syscall_3 %1, %2, %3
+   266 00000F68 48BE-               <3>  mov rsi, %3
+   266 00000F6A [6000000000000000]  <3>
+   266                              <3>  syscall_2 %1, %2
+   266 00000F72 BF02000000          <4>  mov rdi, %2
+   266                              <4>  syscall_1 %1
+   266 00000F77 B801000000          <5>  mov rax, %1
+   266 00000F7C 0F05                <5>  syscall
+   266                              <1>  print STDERR, "37m ", %1, " "
+   266                              <2>  [section .data]
+   266 00000A90 33376D20556E61626C- <2> %%str: db %2
+   266 00000A99 6520746F20636C6F73- <2>
+   266 00000AA2 65206C6F6F70626163- <2>
+   266 00000AAB 6B2064657669636521- <2>
+   266 00000AB4 20                  <2>
+   266                              <2> %%ptr: alignz 16
+   266                              <3> ..@714.ptr: 
+   266 00000AB5 00<rept>            <3>  align %1, db 0
+   266                              <2>  __SECT__
+   266                              <2> 
+   266                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   266 00000F7E BA25000000          <3>  mov rdx, %4
+   266                              <3>  syscall_3 %1, %2, %3
+   266 00000F83 48BE-               <4>  mov rsi, %3
+   266 00000F85 [900A000000000000]  <4>
+   266                              <4>  syscall_2 %1, %2
+   266 00000F8D BF02000000          <5>  mov rdi, %2
+   266                              <5>  syscall_1 %1
+   266 00000F92 B801000000          <6>  mov rax, %1
+   266 00000F97 0F05                <6>  syscall
+   266                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   266 00000F99 BA18000000          <2>  mov rdx, %4
+   266                              <2>  syscall_3 %1, %2, %3
+   266 00000F9E 48BE-               <3>  mov rsi, %3
+   266 00000FA0 [6000000000000000]  <3>
+   266                              <3>  syscall_2 %1, %2
+   266 00000FA8 BF02000000          <4>  mov rdi, %2
+   266                              <4>  syscall_1 %1
+   266 00000FAD B801000000          <5>  mov rax, %1
+   266 00000FB2 0F05                <5>  syscall
+   266 00000FB4 E947F0FFFF          <1>  jmp __abort
+   266                              <1> %%skip:
+   267                                  
+   268                                  	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, MS_RDONLY, nullstring)
+   268 00000FB9 49B8-               <1>  mov r8, %6
+   268 00000FBB [1000000000000000]  <1>
+   268                              <1>  syscall_5 %1, %2, %3, %4, %5
+   268 00000FC3 41BA01000000        <2>  mov r10, %5
+   268                              <2>  syscall_4 %1, %2, %3, %4
+   268 00000FC9 48BA-               <3>  mov rdx, %4
+   268 00000FCB [0000000000000000]  <3>
+   268                              <3>  syscall_3 %1, %2, %3
+   268 00000FD3 48BE-               <4>  mov rsi, %3
+   268 00000FD5 [0009000000000000]  <4>
+   268                              <4>  syscall_2 %1, %2
+   268 00000FDD 48BF-               <5>  mov rdi, %2
+   268 00000FDF [F008000000000000]  <5>
+   268                              <5>  syscall_1 %1
+   268 00000FE7 B8A5000000          <6>  mov rax, %1
+   268 00000FEC 0F05                <6>  syscall
+   269                                  	error_check "Unable to apply mount!"
+   269 00000FEE 4883F800            <1>  cmp rax, 0
+   269 00000FF2 7D5E                <1>  jge %%skip
+   269 00000FF4 48890425[00000000]  <1>  mov [errno], rax
+   269                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   269 00000FFC BA14000000          <2>  mov rdx, %4
+   269                              <2>  syscall_3 %1, %2, %3
+   269 00001001 48BE-               <3>  mov rsi, %3
+   269 00001003 [6000000000000000]  <3>
+   269                              <3>  syscall_2 %1, %2
+   269 0000100B BF02000000          <4>  mov rdi, %2
+   269                              <4>  syscall_1 %1
+   269 00001010 B801000000          <5>  mov rax, %1
+   269 00001015 0F05                <5>  syscall
+   269                              <1>  print STDERR, "37m ", %1, " "
+   269                              <2>  [section .data]
+   269 00000AC0 33376D20556E61626C- <2> %%str: db %2
+   269 00000AC9 6520746F206170706C- <2>
+   269 00000AD2 79206D6F756E742120  <2>
+   269                              <2> %%ptr: alignz 16
+   269                              <3> ..@737.ptr: 
+   269 00000ADB 00<rept>            <3>  align %1, db 0
+   269                              <2>  __SECT__
+   269                              <2> 
+   269                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   269 00001017 BA1B000000          <3>  mov rdx, %4
+   269                              <3>  syscall_3 %1, %2, %3
+   269 0000101C 48BE-               <4>  mov rsi, %3
+   269 0000101E [C00A000000000000]  <4>
+   269                              <4>  syscall_2 %1, %2
+   269 00001026 BF02000000          <5>  mov rdi, %2
+   269                              <5>  syscall_1 %1
+   269 0000102B B801000000          <6>  mov rax, %1
+   269 00001030 0F05                <6>  syscall
+   269                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   269 00001032 BA18000000          <2>  mov rdx, %4
+   269                              <2>  syscall_3 %1, %2, %3
+   269 00001037 48BE-               <3>  mov rsi, %3
+   269 00001039 [6000000000000000]  <3>
+   269                              <3>  syscall_2 %1, %2
+   269 00001041 BF02000000          <4>  mov rdi, %2
+   269                              <4>  syscall_1 %1
+   269 00001046 B801000000          <5>  mov rax, %1
+   269 0000104B 0F05                <5>  syscall
+   269 0000104D E9AEEFFFFF          <1>  jmp __abort
+   269                              <1> %%skip:
+   270                                  
+   271                                  	sys_unlink(hiddenloopdevfilename)
+   271 00001052 48BF-               <1>  mov rdi, %2
+   271 00001054 [F008000000000000]  <1>
+   271                              <1>  syscall_1 %1
+   271 0000105C B857000000          <2>  mov rax, %1
+   271 00001061 0F05                <2>  syscall
+   272                                  	error_check "Unable to unlink loopback device!"
+   272 00001063 4883F800            <1>  cmp rax, 0
+   272 00001067 7D5E                <1>  jge %%skip
+   272 00001069 48890425[00000000]  <1>  mov [errno], rax
+   272                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   272 00001071 BA14000000          <2>  mov rdx, %4
+   272                              <2>  syscall_3 %1, %2, %3
+   272 00001076 48BE-               <3>  mov rsi, %3
+   272 00001078 [6000000000000000]  <3>
+   272                              <3>  syscall_2 %1, %2
+   272 00001080 BF02000000          <4>  mov rdi, %2
+   272                              <4>  syscall_1 %1
+   272 00001085 B801000000          <5>  mov rax, %1
+   272 0000108A 0F05                <5>  syscall
+   272                              <1>  print STDERR, "37m ", %1, " "
+   272                              <2>  [section .data]
+   272 00000AE0 33376D20556E61626C- <2> %%str: db %2
+   272 00000AE9 6520746F20756E6C69- <2>
+   272 00000AF2 6E6B206C6F6F706261- <2>
+   272 00000AFB 636B20646576696365- <2>
+   272 00000B04 2120                <2>
+   272                              <2> %%ptr: alignz 16
+   272                              <3> ..@756.ptr: 
+   272 00000B06 00<rept>            <3>  align %1, db 0
+   272                              <2>  __SECT__
+   272                              <2> 
+   272                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   272 0000108C BA26000000          <3>  mov rdx, %4
+   272                              <3>  syscall_3 %1, %2, %3
+   272 00001091 48BE-               <4>  mov rsi, %3
+   272 00001093 [E00A000000000000]  <4>
+   272                              <4>  syscall_2 %1, %2
+   272 0000109B BF02000000          <5>  mov rdi, %2
+   272                              <5>  syscall_1 %1
+   272 000010A0 B801000000          <6>  mov rax, %1
+   272 000010A5 0F05                <6>  syscall
+   272                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   272 000010A7 BA18000000          <2>  mov rdx, %4
+   272                              <2>  syscall_3 %1, %2, %3
+   272 000010AC 48BE-               <3>  mov rsi, %3
+   272 000010AE [6000000000000000]  <3>
+   272                              <3>  syscall_2 %1, %2
+   272 000010B6 BF02000000          <4>  mov rdi, %2
+   272                              <4>  syscall_1 %1
+   272 000010BB B801000000          <5>  mov rax, %1
+   272 000010C0 0F05                <5>  syscall
+   272 000010C2 E939EFFFFF          <1>  jmp __abort
+   272                              <1> %%skip:
+   273                                  .skip:
+   274                                  	print STDOUT, 10, 13
+   274                              <1>  [section .data]
+   274 00000B10 0A0D                <1> %%str: db %2
+   274                              <1> %%ptr: alignz 16
+   274                              <2> ..@768.ptr: 
+   274 00000B12 00<rept>            <2>  align %1, db 0
+   274                              <1>  __SECT__
+   274                              <1> 
+   274                              <1>  sys_write(%1, %%str, %%ptr - %%str)
+   274 000010C7 BA02000000          <2>  mov rdx, %4
+   274                              <2>  syscall_3 %1, %2, %3
+   274 000010CC 48BE-               <3>  mov rsi, %3
+   274 000010CE [100B000000000000]  <3>
+   274                              <3>  syscall_2 %1, %2
+   274 000010D6 BF01000000          <4>  mov rdi, %2
+   274                              <4>  syscall_1 %1
+   274 000010DB B801000000          <5>  mov rax, %1
+   274 000010E0 0F05                <5>  syscall
+   275                                  
+   276                                  
+   277                                  
+   278                                  _execve:
+   279                                  
+   280                                  	[section .data]
+   281 00000B20 7362696E2F696E6974-     execve_filename: db "sbin/init", 0
+   281 00000B29 00                 
+   282                                  	alignz 16
+   282 00000B2A 00<rept>            <1>  align %1, db 0
+   283                                  
+   284 00000B30 696E697400              argv_init: db "init", 0
+   285                                  	alignz 16
+   285 00000B35 00<rept>            <1>  align %1, db 0
+   286                                  
+   287 00000B40 [300B000000000000]-     argv:	dq argv_init, 0
+   287 00000B48 0000000000000000   
+   288                                  	alignz 16
+   288                              <1>  align %1, db 0
+   289                                  
+   290 00000B50 484F4D453D2F00          env_home: db "HOME=/", 0
+   291                                  	alignz 16
+   291 00000B57 00<rept>            <1>  align %1, db 0
+   292                                  
+   293 00000B60 5445524D3D6C696E75-     env_term: db "TERM=linux", 0
+   293 00000B69 7800               
+   294                                  	alignz 16
+   294 00000B6B 00<rept>            <1>  align %1, db 0
+   295                                  
+   296 00000B70 [500B000000000000]-     env:	dq env_home, env_term, 0
+   296 00000B78 [600B000000000000]-
+   296 00000B80 0000000000000000   
+   297                                  	alignz 16
+   297 00000B88 00<rept>            <1>  align %1, db 0
+   298                                  	__SECT__
+   299                                  
+   300                                  	sys_execve(execve_filename, argv, env)
+   300 000010E2 48BA-               <1>  mov rdx, %4
+   300 000010E4 [700B000000000000]  <1>
+   300                              <1>  syscall_3 %1, %2, %3
+   300 000010EC 48BE-               <2>  mov rsi, %3
+   300 000010EE [400B000000000000]  <2>
+   300                              <2>  syscall_2 %1, %2
+   300 000010F6 48BF-               <3>  mov rdi, %2
+   300 000010F8 [200B000000000000]  <3>
+   300                              <3>  syscall_1 %1
+   300 00001100 B83B000000          <4>  mov rax, %1
+   300 00001105 0F05                <4>  syscall
+   301                                  	error_check "Unable to transfer control to /sbin/init via execve!"
+   301 00001107 4883F800            <1>  cmp rax, 0
+   301 0000110B 7D5E                <1>  jge %%skip
+   301 0000110D 48890425[00000000]  <1>  mov [errno], rax
+   301                              <1>  sys_write(STDERR, error_banner, error_banner.len)
+   301 00001115 BA14000000          <2>  mov rdx, %4
+   301                              <2>  syscall_3 %1, %2, %3
+   301 0000111A 48BE-               <3>  mov rsi, %3
+   301 0000111C [6000000000000000]  <3>
+   301                              <3>  syscall_2 %1, %2
+   301 00001124 BF02000000          <4>  mov rdi, %2
+   301                              <4>  syscall_1 %1
+   301 00001129 B801000000          <5>  mov rax, %1
+   301 0000112E 0F05                <5>  syscall
+   301                              <1>  print STDERR, "37m ", %1, " "
+   301                              <2>  [section .data]
+   301 00000B90 33376D20556E61626C- <2> %%str: db %2
+   301 00000B99 6520746F207472616E- <2>
+   301 00000BA2 7366657220636F6E74- <2>
+   301 00000BAB 726F6C20746F202F73- <2>
+   301 00000BB4 62696E2F696E697420- <2>
+   301 00000BBD 766961206578656376- <2>
+   301 00000BC6 652120              <2>
+   301                              <2> %%ptr: alignz 16
+   301                              <3> ..@803.ptr: 
+   301 00000BC9 00<rept>            <3>  align %1, db 0
+   301                              <2>  __SECT__
+   301                              <2> 
+   301                              <2>  sys_write(%1, %%str, %%ptr - %%str)
+   301 00001130 BA39000000          <3>  mov rdx, %4
+   301                              <3>  syscall_3 %1, %2, %3
+   301 00001135 48BE-               <4>  mov rsi, %3
+   301 00001137 [900B000000000000]  <4>
+   301                              <4>  syscall_2 %1, %2
+   301 0000113F BF02000000          <5>  mov rdi, %2
+   301                              <5>  syscall_1 %1
+   301 00001144 B801000000          <6>  mov rax, %1
+   301 00001149 0F05                <6>  syscall
+   301                              <1>  sys_write(STDERR, error_banner, error_banner.len2)
+   301 0000114B BA18000000          <2>  mov rdx, %4
+   301                              <2>  syscall_3 %1, %2, %3
+   301 00001150 48BE-               <3>  mov rsi, %3
+   301 00001152 [6000000000000000]  <3>
+   301                              <3>  syscall_2 %1, %2
+   301 0000115A BF02000000          <4>  mov rdi, %2
+   301                              <4>  syscall_1 %1
+   301 0000115F B801000000          <5>  mov rax, %1
+   301 00001164 0F05                <5>  syscall
+   301 00001166 E995EEFFFF          <1>  jmp __abort
+   301                              <1> %%skip:
+   302                                  
+   303                                  	sys_exit(2)
+   303 0000116B BF02000000          <1>  mov rdi, %2
+   303                              <1>  syscall_1 %1
+   303 00001170 B83C000000          <2>  mov rax, %1
+   303 00001175 0F05                <2>  syscall

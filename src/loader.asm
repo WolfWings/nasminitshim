@@ -89,198 +89,189 @@ loopcontrol: resq 1
 	sys_unlink(loopcontrolfilename)
 	error_check "Unable to unlink loop-control device!"
 
-_usr:
 	[section .data]
 usrsquashfsfilename: db "srv/read-only/usr.squashfs", 0
 	alignz 16
+
+usrloopdevfilename: db "loop-usr", 0
+	alignz 16
+
+usrmountpoint: db "usr", 0
+	alignz 16
 	__SECT__
+
+	[section .bss]
+usrsquashfsfile: resq 1
+
+usrloopdev: resq 1
+	__SECT__
+
+_usr:
+	print STDOUT, "Mounting /usr..."
 
 	sys_open(usrsquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
 	cmp	rax,	ENOENT
 	jne	.0
-	print STDOUT, "Unable to find squashfs file for /usr, skipping mount."
-	jmp	_usr_skip
-.0:	error_check "Unable to open squashfs file for /usr!"
-
-	[section .bss]
-usrsquashfsfile: resq 1
-	__SECT__
+	print STDOUT, "Unable to find squashfs file, skipping mount."
+	jmp	.skip
+.0:	error_check "Unable to open squashfs file!"
 
 	mov	[usrsquashfsfile], rax
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
-	error_check "Unable to allocate loopback device for /usr!"
-
-	[section .bss]
-usrloopdev: resq 1
-	__SECT__
+	error_check "Unable to allocate loopback device!"
 
 	or	rax,	7 << 8
 	mov	[usrloopdev], rax
 
-	[section .data]
-usrloopdevfilename: db "loop-usr", 0
-	__SECT__
-
 	sys_mknod(usrloopdevfilename, S_IFBLK | 0600O, [usrloopdev])
-	error_check "Unable to create loopback device for /usr!"
+	error_check "Unable to create loopback device!"
 
 	sys_open(usrloopdevfilename, O_CLOEXEC | O_RDWR, 0)
-	error_check "Unable to open loopback device for /usr!"
+	error_check "Unable to open loopback device!"
 
 	mov	[usrloopdev], rax
 
 	sys_ioctl([usrloopdev], LOOP_SET_FD, [usrsquashfsfile])
-	error_check "Unable to attach squashfs to loopback device for /usr!"
+	error_check "Unable to attach squashfs to loopback device!"
 
 	sys_close([usrsquashfsfile])
-	error_check "Unable to close squashfs file for /usr!"
+	error_check "Unable to close squashfs file!"
 
 	sys_close([usrloopdev])
-	error_check "Unable to close loopback device for /usr!"
-
-	[section .data]
-usrmountpoint: db "usr", 0
-	alignz 16
-	__SECT__
+	error_check "Unable to close loopback device!"
 
 	sys_mount(usrloopdevfilename, usrmountpoint, squashfs, MS_RDONLY, nullstring)
 	error_check "Unable to mount /usr!"
 
 	sys_unlink(usrloopdevfilename)
-	error_check "Unable to unlink loopback device for /usr!"
+	error_check "Unable to unlink loopback device!"
+.skip:
+	print STDOUT, 10, 13
 
-_usr_skip:
 
 
-
-_lib64:
 	[section .data]
 lib64squashfsfilename: db "srv/read-only/lib64.squashfs", 0
 	alignz 16
+
+lib64loopdevfilename: db "loop-lib64", 0
+	alignz 16
+
+lib64mountpoint: db "lib64/", 0
+	alignz 16
 	__SECT__
+
+	[section .bss]
+lib64squashfsfile: resq 1
+
+lib64loopdev: resq 1
+	__SECT__
+
+_lib64:
+	print STDOUT, "Mounting /lib64..."
 
 	sys_open(lib64squashfsfilename, O_CLOEXEC | O_RDONLY, 0)
 	cmp	rax,	ENOENT
 	jne	.0
-	print STDOUT, "Unable to find squashfs file for /lib64, skipping mount."
-	jmp	_lib64_skip
-.0:	error_check "Unable to open squashfs file for /lib64!"
-
-	[section .bss]
-lib64squashfsfile: resq 1
-	__SECT__
+	print STDOUT, "Unable to find squashfs file, skipping mount."
+	jmp	.skip
+.0:	error_check "Unable to open squashfs file!"
 
 	mov	[lib64squashfsfile], rax
 
 	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
-	error_check "Unable to allocate loopback device for /lib64!"
-
-	[section .bss]
-lib64loopdev: resq 1
-	__SECT__
+	error_check "Unable to allocate loopback device!"
 
 	or	rax,	7 << 8
 	mov	[lib64loopdev], rax
 
-	[section .data]
-lib64loopdevfilename: db "loop-lib64", 0
-	__SECT__
-
 	sys_mknod(lib64loopdevfilename, S_IFBLK | 0600O, [lib64loopdev])
-	error_check "Unable to create loopback device for /lib64!"
+	error_check "Unable to create loopback device!"
 
 	sys_open(lib64loopdevfilename, O_CLOEXEC | O_RDWR, 0)
-	error_check "Unable to open loopback device for /lib64!"
+	error_check "Unable to open loopback device!"
 
 	mov	[lib64loopdev], rax
 
 	sys_ioctl([lib64loopdev], LOOP_SET_FD, [lib64squashfsfile])
-	error_check "Unable to attach squashfs to loopback device for /lib64!"
+	error_check "Unable to attach squashfs to loopback device!"
 
 	sys_close([lib64squashfsfile])
-	error_check "Unable to close squashfs file for /lib64!"
+	error_check "Unable to close squashfs file!"
 
 	sys_close([lib64loopdev])
-	error_check "Unable to close loopback device for /lib64!"
-
-	[section .data]
-lib64mountpoint: db "lib64/", 0
-	alignz 16
-	__SECT__
+	error_check "Unable to close loopback device!"
 
 	sys_mount(lib64loopdevfilename, lib64mountpoint, squashfs, MS_RDONLY, nullstring)
 	error_check "Unable to mount /lib64!"
 
 	sys_unlink(lib64loopdevfilename)
-	error_check "Unable to unlink loopback device for /lib64!"
+	error_check "Unable to unlink loopback device!"
+.skip:
+	print STDOUT, 10, 13
 
-_lib64_skip:
 
 
-
-_hidden:
 	[section .data]
 hiddensquashfsfilename: db "srv/read-only/hidden.squashfs", 0
 	alignz 16
-	__SECT__
 
-	sys_open(hiddensquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
-	cmp	rax,	ENOENT
-	jne	.0
-	print STDOUT, "Unable to find squashfs file for hiding /srv/read-only, skipping mount."
-	jmp	_hidden_skip
-.0:	error_check "Unable to open squashfs file for hiding /srv/read-only!"
-
-	[section .bss]
-hiddensquashfsfile: resq 1
-	__SECT__
-
-	mov	[hiddensquashfsfile], rax
-
-	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
-	error_check "Unable to allocate loopback device for hiding /srv/read-only!"
-
-	[section .bss]
-hiddenloopdev: resq 1
-	__SECT__
-
-	or	rax,	7 << 8
-	mov	[hiddenloopdev], rax
-
-	[section .data]
 hiddenloopdevfilename: db "loop-hidden", 0
-	__SECT__
+	alignz 16
 
-	sys_mknod(hiddenloopdevfilename, S_IFBLK | 0600O, [hiddenloopdev])
-	error_check "Unable to create loopback device for hiding /srv/read-only!"
-
-	sys_open(hiddenloopdevfilename, O_CLOEXEC | O_RDWR, 0)
-	error_check "Unable to open loopback device for hiding /srv/read-only!"
-
-	mov	[hiddenloopdev], rax
-
-	sys_ioctl([hiddenloopdev], LOOP_SET_FD, [hiddensquashfsfile])
-	error_check "Unable to attach squashfs to loopback device for hiding /srv/read-only!"
-
-	sys_close([hiddensquashfsfile])
-	error_check "Unable to close squashfs file for hiding /srv/read-only!"
-
-	sys_close([hiddenloopdev])
-	error_check "Unable to close loopback device for hiding /srv/read-only!"
-
-	[section .data]
 hiddenmountpoint: db "srv/read-only", 0
 	alignz 16
 	__SECT__
 
+	[section .bss]
+hiddensquashfsfile: resq 1
+
+hiddenloopdev: resq 1
+	__SECT__
+
+_hidden:
+	print STDOUT, "Hiding /srv/read-only..."
+
+	sys_open(hiddensquashfsfilename, O_CLOEXEC | O_RDONLY, 0)
+	cmp	rax,	ENOENT
+	jne	.0
+	print STDOUT, "Unable to find squashfs file, skipping mount."
+	jmp	.skip
+.0:	error_check "Unable to open squashfs file!"
+
+	mov	[hiddensquashfsfile], rax
+
+	sys_ioctl([loopcontrol], LOOP_CTL_GET_FREE, 0)
+	error_check "Unable to allocate loopback device!"
+
+	or	rax,	7 << 8
+	mov	[hiddenloopdev], rax
+
+	sys_mknod(hiddenloopdevfilename, S_IFBLK | 0600O, [hiddenloopdev])
+	error_check "Unable to create loopback device!"
+
+	sys_open(hiddenloopdevfilename, O_CLOEXEC | O_RDWR, 0)
+	error_check "Unable to open loopback device!"
+
+	mov	[hiddenloopdev], rax
+
+	sys_ioctl([hiddenloopdev], LOOP_SET_FD, [hiddensquashfsfile])
+	error_check "Unable to attach squashfs to loopback device!"
+
+	sys_close([hiddensquashfsfile])
+	error_check "Unable to close squashfs file!"
+
+	sys_close([hiddenloopdev])
+	error_check "Unable to close loopback device!"
+
 	sys_mount(hiddenloopdevfilename, hiddenmountpoint, squashfs, MS_RDONLY, nullstring)
-	error_check "Unable to apply mount to hide /srv/read-only!"
+	error_check "Unable to apply mount!"
 
 	sys_unlink(hiddenloopdevfilename)
-	error_check "Unable to unlink loopback device for hiding /srv/read-only!"
-
-_hidden_skip:
+	error_check "Unable to unlink loopback device!"
+.skip:
+	print STDOUT, 10, 13
 
 
 

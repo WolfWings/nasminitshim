@@ -1,3 +1,22 @@
+section .bss align=16
+section .data align=16
+section .text align=16
+
+%macro alignz 1
+	align %1, db 0
+%endmacro
+
+
+%macro print 2+
+	[section .data]
+	alignz 16
+%%str:	db	%2
+%%ptr:
+	__SECT__
+
+	sys_write(%1, %%str, %%ptr - %%str)
+%endmacro
+
 STDIN			EQU 0
 STDOUT			EQU 1
 STDERR			EQU 2

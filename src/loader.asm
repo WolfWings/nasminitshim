@@ -13,7 +13,8 @@ nullstring: db 0
 	; Calling ABI:
 	;
 	;          * PUSH these parameters onto the stack
-	; rsp + 40 * Pointer to SquashFS filename, zero terminated
+	; rsp + 48 * Pointer to filesystem type, zero terminated
+	; rsp + 40 * Pointer to file to mount, zero terminated
 	; rsp + 32 * Pointer to loopback filename, zero terminated
 	; rsp + 24 * Pointer to mountpoint, zero terminated
 	; rsp + 16 - RET address
@@ -54,7 +55,7 @@ __loopback_mount:
 	sys_close([rsp])
 	error_check "Can't close loopback!"
 
-	sys_mount([rsp + 32], [rsp + 24], squashfs, MS_RDONLY, nullstring)
+	sys_mount([rsp + 32], [rsp + 24], [rsp + 48], MS_RDONLY, nullstring)
 	error_check "Can't mount loopback!"
 
 	sys_unlink([rsp + 32])
@@ -118,11 +119,12 @@ _usr:
 	print STDOUT, "Updated version..."
 .noupdate:
 
+	push	squashfs
 	push	usrsquashfsfilename
 	push	usrloopdevfilename
 	push	usrmountpoint
 	call	__loopback_mount
-	add	rsp,	24
+	add	rsp,	32
 
 
 
@@ -149,11 +151,12 @@ _lib64:
 	print STDOUT, "Updated version..."
 .noupdate:
 
+	push	squashfs
 	push	lib64squashfsfilename
 	push	lib64loopdevfilename
 	push	lib64mountpoint
 	call	__loopback_mount
-	add	rsp,	24
+	add	rsp,	32
 
 
 

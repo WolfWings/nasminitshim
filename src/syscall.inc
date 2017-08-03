@@ -37,6 +37,7 @@
 %define sys_ioctl(fd, cmd, arg)			syscall_4  16, fd, cmd, arg
 %define sys_execve(filename, argv, env)		syscall_4  59, filename, argv, env
 %define sys_exit(code)				syscall_2  60, code
+%define sys_fsync(fd)				syscall_2  74, fd
 %define sys_chdir(dir)				syscall_2  80, dir
 %define sys_rename(old, new)			syscall_3  82, old, new
 %define sys_unlink(filename)			syscall_2  87, filename

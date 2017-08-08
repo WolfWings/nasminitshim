@@ -18,7 +18,7 @@ nullstring: db 0
 	; rsp + 32 * Pointer to loopback filename, zero terminated
 	; rsp + 24 * Pointer to mountpoint, zero terminated
 	; rsp + 16 - RET address
-	; rsp +  8 - SquashFS File Handle
+	; rsp +  8 - File Handle for Loopback File
 	; rsp      - Loopback Device Number
 	alignz 16
 __loopback_mount:
@@ -26,9 +26,9 @@ __loopback_mount:
 	sys_open([rsp + 40], O_CLOEXEC | O_RDONLY, 0)
 	cmp	rax,	ENOENT
 	jne	.0
-	print STDOUT, "No squashfs, skipping mount."
+	print STDOUT, "No file found for loopback, skipping mount."
 	jmp	.skip
-.0:	error_check "Can't open squashfs!"
+.0:	error_check "Can't open file for loopback!"
 
 	mov	[rsp + 8], rax
 
@@ -47,10 +47,10 @@ __loopback_mount:
 	mov	[rsp], rax
 
 	sys_ioctl([rsp], LOOP_SET_FD, [rsp + 8])
-	error_check "Can't attach squashfs to loopback!"
+	error_check "Can't attach file to loopback!"
 
 	sys_close([rsp + 8])
-	error_check "Can't close squashfs!"
+	error_check "Can't close file!"
 
 	sys_close([rsp])
 	error_check "Can't close loopback!"
